@@ -15,13 +15,13 @@ where
 
 import qualified Data.ByteString.Lazy        as LB
 
-import Data.Aeson
 import           Control.Concurrent.MSem     (MSem, new)
 import           Control.Logging             (timedDebug)
+import           Data.Aeson
 import           Data.Maybe                  (fromJust)
 import           Eve.Api.Config
 import           Eve.Api.Types
-import           Formatting                  (sformat, int, (%))
+import           Formatting                  (int, sformat, (%))
 import           Network.HTTP.Client.CertMan (getURL)
 import           Network.URL                 (add_param, exportURL, importURL)
 
@@ -35,7 +35,6 @@ lookupCharacterInfo :: CharacterID -> IO CharacterInfo
 lookupCharacterInfo charId =
   timedDebug (sformat ("looking up character " % int) (_characterID charId))
     (parseBody <$>getURL (charInfoUrl charId))
-
 
 charInfoUrl :: CharacterID -> String
 charInfoUrl charId =

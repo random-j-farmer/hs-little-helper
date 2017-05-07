@@ -28,7 +28,10 @@ import           GHC.Generics
 -- For comparisons, it is always kept in lowercase
 --
 newtype CharacterName = MkCharacterName { _characterName :: Text }
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord)
+
+instance Show CharacterName where
+  show cn = show (_characterName cn)
 
 -- | Constructor for a CharacterName
 characterName :: Text -> CharacterName
@@ -36,7 +39,10 @@ characterName = MkCharacterName . T.toLower
 
 -- | CharacterID is a numeric ID that identifies a Character
 newtype CharacterID = CharacterID { _characterID :: Integer }
-  deriving Show
+  deriving (Eq, Ord)
+
+instance Show CharacterID where
+  show ci = show (_characterID ci)
 
 -- {"corporation_id": 98393635, "birthday": "2015-04-21T08:29:44Z", "name": "Random J Farmer", "gender": "male", "race_id":1, "bloodline_id": 2, "description": "", "alliance_id": 99007035, "ancestry_id": 7, "security_status": -1.1106748358672103}
 {-

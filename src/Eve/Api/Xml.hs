@@ -11,7 +11,6 @@ module Eve.Api.Xml (lookupCharacterIDs) where
 
 import qualified Data.ByteString             as B
 import qualified Data.ByteString.Lazy        as LB
-import qualified Data.Map.Strict             as M
 import qualified Data.Text                   as T
 
 import           Control.Concurrent.MSem     (MSem, new)
@@ -39,19 +38,19 @@ import           Text.XML.Expat.Tree         (UNode, XMLParseError,
                                               parseThrowing)
 
 -- | Lookup the given character names and obtain their IDs
-lookupCharacterIDs :: [CharacterName] -> IO (M.Map CharacterName CharacterID)
+lookupCharacterIDs :: [CharacterName] -> IO [(CharacterName, CharacterID)]
 lookupCharacterIDs charNames = do
   sem <- apiSem
-  M.unions <$> parmap sem _lookupCharacterIDs (chunksOf xmlApiChunkSize charNames)
+  concat <$> parmap sem _lookupCharacterIDs (chunksOf xmlApiChunkSize charNames)
 
 apiSem :: IO (MSem Int)
 apiSem = new xmlApiConnections
 
-_lookupCharacterIDs :: [CharacterName] -> IO (M.Map CharacterName CharacterID)
+_lookupCharacterIDs :: [CharacterName] -> IO [(CharacterName, CharacterID)]
 _lookupCharacterIDs charNames =
   timedDebug (sformat ("lookupCharacterIDs: looking up " % int % " names")
                      (length charNames))
-             (M.fromList . parseBody <$> (getURL . computeURL) charNames)
+             (parseBody <$> (getURL . computeURL) charNames)
 
 
 computeURL :: [CharacterName] -> String

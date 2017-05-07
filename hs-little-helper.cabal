@@ -16,6 +16,7 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Eve.Api.Config
+                     , Eve.Api.Cache
                      , Eve.Api.Esi
                      , Eve.Api.Types
                      , Eve.Api.Xml
@@ -33,11 +34,12 @@ library
                      , http-types
                      , logging
                      , network
-                     , url
-                     , utf8-string
                      , SafeSemaphore
                      , split
                      , text
+                     , time
+                     , url
+                     , utf8-string
   default-language:    Haskell2010
 
 executable hs-little-helper-exe
