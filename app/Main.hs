@@ -9,7 +9,7 @@ import           Data.Maybe                  (fromJust)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as TIO
 import qualified Data.Text.Lazy              as LT
-import           Eve.Api.Cache               (lookupCharacterIDs, lookupCharacterInfo)
+import           Eve.Api.Cache
 import           Eve.Api.Config
 import           Eve.Api.Types
 import           Formatting                  (int, sformat, stext, (%))
@@ -36,6 +36,8 @@ handleName :: M.Map CharacterName CharacterID -> CharacterName -> IO ()
 handleName byName name = do
   debug $ sformat ("id:   " % int % "\tname: " % stext) cid cname
   info <- lookupCharacterInfo (fromJust (M.lookup name byName))
-  print info
+  corp <- lookupCorporationInfo (ciCorporationId info)
+  alli <- lookupAllianceInfo (ciAllianceId info)
+  debug $ sformat ("char:" % stext % " corp:" % stext) (ciName info) (coCorporationName corp)
   where cid = maybe 0 _characterID (M.lookup name byName) :: Integer
         cname = _characterName name

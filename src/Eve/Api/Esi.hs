@@ -10,6 +10,8 @@ Access to the various ESI Endpoints
 -}
 
 module Eve.Api.Esi ( lookupCharacterInfo
+                   , lookupCorporationInfo
+                   , lookupAllianceInfo
                    )
 where
 
@@ -34,16 +36,38 @@ esiSem = new esiConnections
 lookupCharacterInfo :: CharacterID -> IO CharacterInfo
 lookupCharacterInfo charId =
   timedDebug (sformat ("looking up character " % int) (_characterID charId))
-    (parseBody <$>getURL (charInfoUrl charId))
+    ((fromJust . decode) <$> getURL (charInfoUrl charId))
 
 charInfoUrl :: CharacterID -> String
-charInfoUrl charId =
+charInfoUrl = esiUrl "characters"
+
+corpInfoUrl :: CorporationID -> String
+corpInfoUrl = esiUrl "corporations"
+
+allianceInfoUrl :: AllianceID -> String
+allianceInfoUrl = esiUrl "alliances"
+
+esiUrl :: Show a => String -> a -> String
+esiUrl service k =
   exportURL urlWithDatasource
   where
-    base = "https://esi.tech.ccp.is/latest/characters/"
-    str = base ++ show (_characterID charId) ++ "/"
+    base = "https://esi.tech.ccp.is/latest/" ++ service ++ "/"
+    str = base ++ show k ++ "/"
     url = fromJust $ importURL str
     urlWithDatasource = add_param url ("datasource", esiDatasource)
 
-parseBody :: LB.ByteString -> CharacterInfo
-parseBody = fromJust . decode
+-- | Public Corporation info
+--
+-- https://esi.tech.ccp.is/latest/corporations/666/?datasource=tranquility
+lookupCorporationInfo :: CorporationID -> IO CorporationInfo
+lookupCorporationInfo corpId =
+  timedDebug (sformat ("looking up corporation " % int) (_corporationID corpId))
+    ((fromJust . decode) <$> getURL (corpInfoUrl corpId))
+
+-- | Public Alliance info
+--
+-- https://esi.tech.ccp.is/latest/alliances/666/?datasource=tranquility
+lookupAllianceInfo :: AllianceID -> IO AllianceInfo
+lookupAllianceInfo aid =
+  timedDebug (sformat ("looking up alliance " % int) (_allianceID aid))
+    ((fromJust . decode) <$> getURL (allianceInfoUrl aid))

@@ -6,7 +6,12 @@ Description: Cached Eve API
 Copyright:   2017 Random J Farmer
 License:     MIT
 -}
-module Eve.Api.Cache where
+module Eve.Api.Cache
+  ( lookupCharacterIDs
+  , lookupCharacterInfo
+  , lookupCorporationInfo
+  , lookupAllianceInfo
+  ) where
 
 import           Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_,
                                           newMVar, putMVar, readMVar, takeMVar)
@@ -61,29 +66,53 @@ data Cached a =
 cacheSeconds :: Double
 cacheSeconds = 3*3600
 
-ignoreAfter :: Double -> UTCTime -> (CharacterID, Cached a) -> Either CharacterID (CharacterID, Cached a)
+ignoreAfter :: Double -> UTCTime -> (k, Cached a) -> Either k (k, Cached a)
 ignoreAfter seconds now (charId, ca) =
     if realToFrac delta < seconds
       then Right (charId, ca)
       else Left charId
   where delta = diffUTCTime now (cachedTime ca)
 
-characterInfoCache :: MVar (M.Map CharacterID (Cached CharacterInfo))
+type CacheMap k v = M.Map k (Cached v)
+type CacheMVar k v = MVar (CacheMap k v)
+
+characterInfoCache :: CacheMVar CharacterID CharacterInfo
 {-# NOINLINE characterInfoCache #-}
 characterInfoCache = unsafePerformIO $ do
   debug "characterInfoCache - initializing cache"
   newMVar M.empty
 
-lookupCharacterInfo :: CharacterID -> IO CharacterInfo
-lookupCharacterInfo charId = do
-  byId <- readMVar characterInfoCache
+corporationInfoCache :: CacheMVar CorporationID CorporationInfo
+{-# NOINLINE corporationInfoCache #-}
+corporationInfoCache = unsafePerformIO $ do
+  debug "corporationInfoCache - initializing cache"
+  newMVar M.empty
+
+allianceInfoCache :: CacheMVar AllianceID AllianceInfo
+{-# NOINLINE allianceInfoCache #-}
+allianceInfoCache = unsafePerformIO $ do
+  debug "allianceInfoCache - initializing cache"
+  newMVar M.empty
+
+esiLookup :: Ord k => CacheMVar k v -> (k -> IO v) -> k -> IO v
+esiLookup cache esiLookup k = do
+  byId <- readMVar cache
   now <- getCurrentTime
-  let cached = lookupEither byId charId >>= ignoreAfter cacheSeconds now
+  let cached = lookupEither byId k >>= ignoreAfter cacheSeconds now
   case cached of
     Left k -> do
-      result <- E.lookupCharacterInfo k
-      modifyMVar_ characterInfoCache (\byId -> do
+      result <- esiLookup k
+      modifyMVar_ cache (\byId -> do
         let byIdNew = M.insert k (Cached result now) byId
         return byIdNew)
       return result
-    Right (k, Cached ci _) -> return ci
+    Right (k, Cached v _) -> return v
+
+lookupCharacterInfo :: CharacterID -> IO CharacterInfo
+lookupCharacterInfo = esiLookup characterInfoCache E.lookupCharacterInfo
+
+lookupCorporationInfo :: CorporationID -> IO CorporationInfo
+lookupCorporationInfo = esiLookup corporationInfoCache E.lookupCorporationInfo
+
+lookupAllianceInfo :: AllianceID -> IO AllianceInfo
+lookupAllianceInfo = esiLookup allianceInfoCache E.lookupAllianceInfo
