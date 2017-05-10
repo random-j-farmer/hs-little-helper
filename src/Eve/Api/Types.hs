@@ -70,7 +70,7 @@ data CharacterInfo = CharacterInfo
   , ciRaceId         :: Integer
   , ciBloodlineId    :: Integer
   , ciDescription    :: Text
-  , ciAllianceId     :: AllianceID
+  , ciAllianceId     :: Maybe AllianceID
   , ciAncestryId     :: Integer
   , ciSecurityStatus :: Double
   } deriving (Show, Generic)
@@ -117,8 +117,8 @@ data CorporationInfo = CorporationInfo
   , coTaxRate                :: Double
   , coCreatorID              :: CharacterID
   , coUrl                    :: Text
-  , coAllianceID             :: AllianceID
-  , coCreationDate           :: Text
+  , coAllianceID             :: Maybe AllianceID
+  , coCreationDate           :: Maybe Text
   , coFaction                :: Maybe Text
   } deriving (Show, Generic)
 

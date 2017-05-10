@@ -60,7 +60,7 @@ computeURL charNames = urlWithNames where
     urlWithNames = exportURL $ foldr (flip add_param) url tuples
 
 parseBody :: LB.ByteString -> [(CharacterName, CharacterID)]
-parseBody = extractCharacterIDs . parseXml
+parseBody = filter (\x -> _characterID (snd x) /= 0) . extractCharacterIDs . parseXml
 
 parseXml :: LB.ByteString -> UNode Text
 parseXml = parseThrowing defaultParseOptions

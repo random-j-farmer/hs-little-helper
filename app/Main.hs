@@ -5,7 +5,7 @@ import           Control.Logging             (debug, log, withStdoutLogging)
 import           Control.Monad               (mapM_)
 import qualified Data.ByteString.Lazy        as LB
 import qualified Data.Map.Strict             as M
-import           Data.Maybe                  (fromJust)
+import           Data.Maybe                  (fromJust, fromMaybe)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as TIO
 import qualified Data.Text.Lazy              as LT
@@ -30,14 +30,14 @@ handleFile fn = do
   str <- TIO.readFile fn
   let names = characterName <$> T.lines str
   byName <- M.fromList <$> lookupCharacterIDs names
-  mapM_ (handleName byName) names
+  mapM_ (handleName byName) $ M.keys byName
 
 handleName :: M.Map CharacterName CharacterID -> CharacterName -> IO ()
 handleName byName name = do
-  debug $ sformat ("id:   " % int % "\tname: " % stext) cid cname
-  info <- lookupCharacterInfo (fromJust (M.lookup name byName))
-  corp <- lookupCorporationInfo (ciCorporationId info)
-  alli <- lookupAllianceInfo (ciAllianceId info)
+  debug $ sformat ("id:" % int % "\tname: " % stext) (_characterID cid) cname
+  info <- lookupCharacterInfo $ fromJust (M.lookup name byName)
+  corp <- lookupCorporationInfo $ ciCorporationId info
+  let xxx = lookupAllianceInfo <$> ciAllianceId info
   debug $ sformat ("char:" % stext % " corp:" % stext) (ciName info) (coCorporationName corp)
-  where cid = maybe 0 _characterID (M.lookup name byName) :: Integer
+  where cid = fromJust $ M.lookup name byName
         cname = _characterName name
