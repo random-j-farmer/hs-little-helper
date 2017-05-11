@@ -11,6 +11,17 @@ module Eve.Api.Cache
   , lookupCharacterInfo
   , lookupCorporationInfo
   , lookupAllianceInfo
+  , lookupKillboardStats
+  , CharacterInfo(..)
+  , CorporationInfo(..)
+  , AllianceInfo(..)
+  , KillboardStats(..)
+  , KillboardMonth(..)
+  , ActivePvp(..)
+  , ActivePvpShips(..)
+  , ActivePvpSystems(..)
+  , ActivePvpKills(..)
+  , ZkillInfo(..)
   ) where
 
 import           Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_,
@@ -21,9 +32,17 @@ import qualified Data.Map.Strict         as M
 import           Data.Time.Clock         (DiffTime, UTCTime, diffUTCTime,
                                           getCurrentTime)
 import           Data.Tuple              (swap)
+import           Eve.Api.Esi             (AllianceInfo (..), CharacterInfo (..),
+                                          CorporationInfo (..))
 import qualified Eve.Api.Esi             as E
 import           Eve.Api.Types
 import qualified Eve.Api.Xml             as X
+import           Eve.Api.Zkill           (ActivePvp (..), ActivePvpKills (..),
+                                          ActivePvpShips (..),
+                                          ActivePvpSystems (..),
+                                          KillboardMonth (..),
+                                          KillboardStats (..), ZkillInfo (..))
+import qualified Eve.Api.Zkill           as Z
 import           Formatting              (int, sformat, stext, (%))
 import           System.IO.Unsafe        (unsafePerformIO)
 
@@ -94,6 +113,13 @@ allianceInfoCache = unsafePerformIO $ do
   debug "allianceInfoCache - initializing cache"
   newMVar M.empty
 
+killboardStatCache :: CacheMVar CharacterID KillboardStats
+{-# NOINLINE killboardStatCache #-}
+killboardStatCache = unsafePerformIO $ do
+  debug "killboardStatCache - initializing cache"
+  newMVar M.empty
+
+
 esiLookup :: Ord k => CacheMVar k v -> (k -> IO v) -> k -> IO v
 esiLookup cache esiLookup k = do
   byId <- readMVar cache
@@ -116,3 +142,6 @@ lookupCorporationInfo = esiLookup corporationInfoCache E.lookupCorporationInfo
 
 lookupAllianceInfo :: AllianceID -> IO AllianceInfo
 lookupAllianceInfo = esiLookup allianceInfoCache E.lookupAllianceInfo
+
+lookupKillboardStats :: CharacterID -> IO KillboardStats
+lookupKillboardStats = esiLookup killboardStatCache Z.lookupKillboardStats
