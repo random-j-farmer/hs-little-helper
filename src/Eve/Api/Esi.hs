@@ -12,6 +12,9 @@ Access to the various ESI Endpoints
 module Eve.Api.Esi ( lookupCharacterInfo
                    , lookupCorporationInfo
                    , lookupAllianceInfo
+                   , charInfoUrl
+                   , corpInfoUrl
+                   , allianceInfoUrl
                    , CharacterInfo(..)
                    , CorporationInfo(..)
                    , AllianceInfo(..)

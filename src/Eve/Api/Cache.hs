@@ -24,6 +24,7 @@ module Eve.Api.Cache
   , ActivePvpSystems(..)
   , ActivePvpKills(..)
   , ZkillInfo(..)
+  , Cached(..)
   ) where
 
 import           Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_,
@@ -175,7 +176,6 @@ loadCaches = withStdoutLogging $ do
   loadCache corporationInfoCache "dump/corporations.json"
   loadCache allianceInfoCache "dump/alliances.json"
   loadCache killboardStatCache "dump/killboards.json"
-
 
 dumpCache mvar fn = do
   m <- readMVar mvar

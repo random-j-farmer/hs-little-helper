@@ -7,7 +7,7 @@ Copyright:   (c) 2017 Random J. Farmer
 License:     MIT
 
 -}
-module Eve.Api.Xml (lookupCharacterIDs) where
+module Eve.Api.Xml (lookupCharacterIDs, characterIDUrl, parseXMLBody) where
 
 import qualified Data.ByteString             as B
 import qualified Data.ByteString.Lazy        as LB
@@ -50,17 +50,18 @@ _lookupCharacterIDs :: [CharacterName] -> IO [(CharacterName, CharacterID)]
 _lookupCharacterIDs charNames =
   timedDebug (sformat ("lookupCharacterIDs: looking up " % int % " names")
                      (length charNames))
-             (parseBody <$> (getURL . computeURL) charNames)
+             (parseXMLBody <$> (getURL . characterIDUrl) charNames)
 
 
-computeURL :: [CharacterName] -> String
-computeURL charNames = urlWithNames where
+characterIDUrl :: [CharacterName] -> String
+characterIDUrl charNames = urlWithNames where
     url = fromJust $ importURL "https://api.eveonline.com/eve/CharacterID.xml.aspx"
     tuples = (,) "names" . T.unpack . _characterName <$> charNames
     urlWithNames = exportURL $ foldr (flip add_param) url tuples
 
-parseBody :: LB.ByteString -> [(CharacterName, CharacterID)]
-parseBody = filter (\x -> _characterID (snd x) /= 0) . extractCharacterIDs . parseXml
+-- XXX: return a either, don't use parseThrowing
+parseXMLBody :: LB.ByteString -> [(CharacterName, CharacterID)]
+parseXMLBody = filter (\x -> _characterID (snd x) /= 0) . extractCharacterIDs . parseXml
 
 parseXml :: LB.ByteString -> UNode Text
 parseXml = parseThrowing defaultParseOptions

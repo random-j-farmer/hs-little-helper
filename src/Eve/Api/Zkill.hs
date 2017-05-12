@@ -12,6 +12,7 @@ Not all info is parsed (groups, newtype wrapper type strings).
 -}
 module Eve.Api.Zkill
   ( lookupKillboardStats
+  , zkillStatUrl
   , KillboardStats(..)
   , KillboardMonth(..)
   , ActivePvp(..)

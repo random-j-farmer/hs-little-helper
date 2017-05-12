@@ -1,2 +1,3 @@
+(A) runTestIO should index by text, currently very slow
 (B) manual parsing of zkillboard data, it's just too irregular
 ZKM Stats

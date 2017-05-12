@@ -65,6 +65,12 @@ xmlApiChunkSize = read $ env "XML_API_CHUNK_SIZE" "50"
 esiConnections :: Int
 esiConnections = read $ env "ESI_CONNECTIONS" "4"
 
+-- | Number of parallel zkillboard connections - ZKILL_CONNECTIONS
+--
+-- If no limit is given, 4 parallel connetions will be used.
+zkillConnections :: Int
+zkillConnections = read $ env "ZKILL_CONNECTIONS" "4"
+
 -- | Ese Datasource - ESI_DATASOURCE
 --
 -- Defaults to "tranquility"

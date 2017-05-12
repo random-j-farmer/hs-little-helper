@@ -13,12 +13,12 @@ import qualified Data.Text.IO                as TIO
 import qualified Data.Text.Lazy              as LT
 import           Eve.Api.Cache
 import           Eve.Api.Config
+import           Eve.Api.FreeHttp
 import           Eve.Api.Types
 import           Formatting                  (int, sformat, stext, (%))
 import           Network.HTTP.Client.CertMan (setGlobalManagerFromPath)
 import           Network.Socket              (withSocketsDo)
 import           System.Environment          (getArgs, lookupEnv)
-
 
 
 main :: IO ()
