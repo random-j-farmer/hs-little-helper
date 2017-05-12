@@ -32,11 +32,14 @@ newtype CharacterName = MkCharacterName { _characterName :: Text }
 
 instance Show CharacterName where
   show cn = show (_characterName cn)
+instance FromJSON CharacterName where
+  parseJSON x = characterName <$> (parseJSON x :: Parser Text)
 instance ToJSON CharacterName where
   toJSON = String . _characterName
+instance FromJSONKey CharacterName where
+  fromJSONKey = FromJSONKeyText characterName
 instance ToJSONKey CharacterName where
   toJSONKey = toJSONKeyText _characterName
-
 
 -- | Constructor for a CharacterName
 characterName :: Text -> CharacterName
@@ -52,6 +55,8 @@ instance ToJSON CharacterID where
   toJSON = Number . realToFrac . _characterID
 instance FromJSON CharacterID where
   parseJSON x = CharacterID <$> (parseJSON x :: Parser Integer)
+instance FromJSONKey CharacterID where
+  fromJSONKey = CharacterID <$> fromJSONKey
 instance ToJSONKey CharacterID where
   toJSONKey = toJSONKeyText (T.pack . show)
 
@@ -64,6 +69,8 @@ instance ToJSON CorporationID where
   toJSON = Number . realToFrac . _corporationID
 instance FromJSON CorporationID where
   parseJSON x = CorporationID <$> (parseJSON x :: Parser Integer)
+instance FromJSONKey CorporationID where
+  fromJSONKey = CorporationID <$> fromJSONKey
 instance ToJSONKey CorporationID where
   toJSONKey = toJSONKeyText (T.pack . show)
 
@@ -77,5 +84,7 @@ instance ToJSON AllianceID where
   toJSON = Number . realToFrac . _allianceID
 instance FromJSON AllianceID where
   parseJSON x = AllianceID <$> (parseJSON x :: Parser Integer)
+instance FromJSONKey AllianceID where
+  fromJSONKey = AllianceID <$> fromJSONKey
 instance ToJSONKey AllianceID where
   toJSONKey = toJSONKeyText (T.pack . show)
