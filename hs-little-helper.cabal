@@ -28,6 +28,7 @@ library
                      , containers
                      , cert-store-manager
                      , formatting
+                     , free
                      , hexpat
                      , http-client
                      , http-client-tls

@@ -41,10 +41,12 @@ handleName byName name = do
   let charId = fromJust $ M.lookup name byName
   info <- lookupCharacterInfo charId
   corp <- lookupCorporationInfo $ ciCorporationId info
-  let xxx = lookupAllianceInfo <$> ciAllianceId info
+  alliance <- sequence $ lookupAllianceInfo <$> ciAllianceId info
   stats <- lookupKillboardStats charId
-  debug $ sformat ("char:" % stext % " corp:" % stext % " kills:" % int % " losses:" % int)
-                  (ciName info) (coCorporationName corp)
+  debug $ sformat ("char:" % stext % " corp:" % stext % " alliance:" % stext % " kills:" % int % " losses:" % int)
+                  (ciName info)
+                  (coCorporationName corp)
+                  (fromMaybe "" $ aiAllianceName <$> alliance)
                   (fromMaybe 0 $ ksshipsDestroyed stats)
                   (fromMaybe 0 $ ksshipsLost stats)
   -- let statsStr = Data.Aeson.encode stats

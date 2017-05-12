@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 {- |
 Module:      Eve.Api.Cache
@@ -12,6 +13,7 @@ module Eve.Api.Cache
   , lookupCorporationInfo
   , lookupAllianceInfo
   , lookupKillboardStats
+  , dumpCaches
   , CharacterInfo(..)
   , CorporationInfo(..)
   , AllianceInfo(..)
@@ -27,6 +29,9 @@ module Eve.Api.Cache
 import           Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_,
                                           newMVar, putMVar, readMVar, takeMVar)
 import           Control.Logging         (debug)
+import           Data.Aeson
+import Data.Aeson.Types
+import qualified Data.ByteString.Lazy    as L
 import           Data.Either             (partitionEithers)
 import qualified Data.Map.Strict         as M
 import           Data.Time.Clock         (DiffTime, UTCTime, diffUTCTime,
@@ -45,6 +50,7 @@ import           Eve.Api.Zkill           (ActivePvp (..), ActivePvpKills (..),
 import qualified Eve.Api.Zkill           as Z
 import           Formatting              (int, sformat, stext, (%))
 import           System.IO.Unsafe        (unsafePerformIO)
+import GHC.Generics (Generic)
 
 
 knownAndUnknown:: Ord k => M.Map k a -> [k] -> ([(k,a)], [k])
@@ -80,7 +86,10 @@ data Cached a =
   Cached
   { cachedInfo :: a
   , cachedTime :: UTCTime
-  }
+  } deriving (Show)
+instance ToJSON a => ToJSON (Cached a) where
+  toJSON (Cached info time) = object ["cachedInfo" .= toJSON info, "cachedTime" .= toJSON time]
+
 
 cacheSeconds :: Double
 cacheSeconds = 3*3600
@@ -145,3 +154,16 @@ lookupAllianceInfo = esiLookup allianceInfoCache E.lookupAllianceInfo
 
 lookupKillboardStats :: CharacterID -> IO KillboardStats
 lookupKillboardStats = esiLookup killboardStatCache Z.lookupKillboardStats
+
+
+dumpCaches :: IO ()
+dumpCaches = do
+  dumpCache idByName "dump/id_by_name.json"
+  dumpCache characterInfoCache "dump/characters.json"
+  dumpCache corporationInfoCache "dump/corporations.json"
+  dumpCache allianceInfoCache "dump/alliances.json"
+  dumpCache killboardStatCache "dump/killboards.json"
+
+dumpCache m fn = do
+  m' <- readMVar m
+  L.writeFile fn $ encode m'

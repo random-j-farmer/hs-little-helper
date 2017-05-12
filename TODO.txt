@@ -1,3 +1,2 @@
-(A) dump caches to json for tests / disconnected work
 (B) manual parsing of zkillboard data, it's just too irregular
 ZKM Stats

@@ -32,6 +32,11 @@ newtype CharacterName = MkCharacterName { _characterName :: Text }
 
 instance Show CharacterName where
   show cn = show (_characterName cn)
+instance ToJSON CharacterName where
+  toJSON = String . _characterName
+instance ToJSONKey CharacterName where
+  toJSONKey = toJSONKeyText _characterName
+
 
 -- | Constructor for a CharacterName
 characterName :: Text -> CharacterName
@@ -47,6 +52,8 @@ instance ToJSON CharacterID where
   toJSON = Number . realToFrac . _characterID
 instance FromJSON CharacterID where
   parseJSON x = CharacterID <$> (parseJSON x :: Parser Integer)
+instance ToJSONKey CharacterID where
+  toJSONKey = toJSONKeyText (T.pack . show)
 
 -- | CorporationID is a numeric ID that identifies a corporation
 newtype CorporationID = CorporationID { _corporationID :: Integer }
@@ -57,6 +64,8 @@ instance ToJSON CorporationID where
   toJSON = Number . realToFrac . _corporationID
 instance FromJSON CorporationID where
   parseJSON x = CorporationID <$> (parseJSON x :: Parser Integer)
+instance ToJSONKey CorporationID where
+  toJSONKey = toJSONKeyText (T.pack . show)
 
 
 -- | AllianceID is a numeric ID that identifies an alliance
@@ -68,3 +77,5 @@ instance ToJSON AllianceID where
   toJSON = Number . realToFrac . _allianceID
 instance FromJSON AllianceID where
   parseJSON x = AllianceID <$> (parseJSON x :: Parser Integer)
+instance ToJSONKey AllianceID where
+  toJSONKey = toJSONKeyText (T.pack . show)
