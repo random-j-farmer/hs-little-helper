@@ -9,16 +9,14 @@ License:     MIT
 Access to the various ESI Endpoints
 -}
 
-module Eve.Api.Esi ( lookupCharacterInfo
-                   , lookupCorporationInfo
-                   , lookupAllianceInfo
-                   , charInfoUrl
-                   , corpInfoUrl
-                   , allianceInfoUrl
-                   , CharacterInfo(..)
-                   , CorporationInfo(..)
-                   , AllianceInfo(..)
-                   )
+module Eve.Api.Esi
+  ( charInfoUrl
+  , corpInfoUrl
+  , allianceInfoUrl
+  , CharacterInfo(..)
+  , CorporationInfo(..)
+  , AllianceInfo(..)
+  )
 where
 
 import           Control.Concurrent.MSem     (MSem, new)
@@ -119,24 +117,15 @@ instance ToJSON AllianceInfo where
 instance FromJSON AllianceInfo where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . drop 2}
 
-
-esiSem :: IO(MSem Int)
-esiSem = new esiConnections
-
--- | Public character info
---
--- https://esi.tech.ccp.is/latest/characters/666/?datasource=tranquility
-lookupCharacterInfo :: CharacterID -> IO CharacterInfo
-lookupCharacterInfo charId =
-  timedDebug (sformat ("looking up character " % int) (_characterID charId))
-    ((fromJust . decode) <$> getURL (charInfoUrl charId))
-
+-- | Url for character lookup
 charInfoUrl :: CharacterID -> String
 charInfoUrl = esiUrl "characters"
 
+-- | Url for corporation lookup
 corpInfoUrl :: CorporationID -> String
 corpInfoUrl = esiUrl "corporations"
 
+-- | Url for alliance lookup
 allianceInfoUrl :: AllianceID -> String
 allianceInfoUrl = esiUrl "alliances"
 
@@ -148,19 +137,3 @@ esiUrl service k =
     str = base ++ show k ++ "/"
     url = fromJust $ importURL str
     urlWithDatasource = add_param url ("datasource", esiDatasource)
-
--- | Public Corporation info
---
--- https://esi.tech.ccp.is/latest/corporations/666/?datasource=tranquility
-lookupCorporationInfo :: CorporationID -> IO CorporationInfo
-lookupCorporationInfo corpId =
-  timedDebug (sformat ("looking up corporation " % int) (_corporationID corpId))
-    ((fromJust . decode) <$> getURL (corpInfoUrl corpId))
-
--- | Public Alliance info
---
--- https://esi.tech.ccp.is/latest/alliances/666/?datasource=tranquility
-lookupAllianceInfo :: AllianceID -> IO AllianceInfo
-lookupAllianceInfo aid =
-  timedDebug (sformat ("looking up alliance " % int) (_allianceID aid))
-    ((fromJust . decode) <$> getURL (allianceInfoUrl aid))

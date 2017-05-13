@@ -11,8 +11,7 @@ Not all info is parsed (groups, newtype wrapper type strings).
 
 -}
 module Eve.Api.Zkill
-  ( lookupKillboardStats
-  , zkillStatUrl
+  ( zkillStatUrl
   , KillboardStats(..)
   , KillboardMonth(..)
   , ActivePvp(..)
@@ -124,13 +123,3 @@ zkillStatUrl charId =
   where
     str = "https://zkillboard.com/api/stats/characterID/" ++ show charId ++ "/"
     url = fromJust $ importURL str
-
-lookupKillboardStats :: CharacterID -> IO KillboardStats
-lookupKillboardStats charId =
-  timedDebug (sformat ("zkillboard stats for " % int) (_characterID charId))
-    ((fromRight . eitherDecode) <$> getURL (zkillStatUrl charId))
-
-
-fromRight x = case x of
-  Left y  -> throw (userError ("fromRight: Left " ++ show y))
-  Right y -> y

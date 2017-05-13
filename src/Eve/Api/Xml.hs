@@ -7,23 +7,24 @@ Copyright:   (c) 2017 Random J. Farmer
 License:     MIT
 
 -}
-module Eve.Api.Xml (lookupCharacterIDs, characterIDUrl, parseXMLBody) where
-
-import qualified Data.ByteString             as B
-import qualified Data.ByteString.Lazy        as LB
-import qualified Data.Text                   as T
+module Eve.Api.Xml
+  ( characterIDUrl
+  , parseXMLBody)
+  where
 
 import           Control.Concurrent.MSem     (MSem, new)
 import           Control.Exception           (Exception (..), throwIO)
 import           Control.Logging             (debug, timedDebug)
 import           Data.ByteString             (ByteString)
+import qualified Data.ByteString             as B
+import qualified Data.ByteString.Lazy        as LB
 import           Data.Foldable               (foldl')
 import           Data.List.Split             (chunksOf)
 import           Data.Maybe                  (fromJust)
 import           Data.Text                   (Text)
+import qualified Data.Text                   as T
 import           Data.Typeable               (Typeable (..))
 import           Eve.Api.Config
-import           Eve.Api.Par                 (parmap)
 import           Eve.Api.Types
 import           Formatting                  (int, sformat, shown, text, (%))
 import           Network.HTTP.Client
@@ -36,22 +37,6 @@ import           Text.XML.Expat.Proc         (findChild, findChildren)
 import           Text.XML.Expat.Tree         (UNode, XMLParseError,
                                               defaultParseOptions, getAttribute,
                                               parseThrowing)
-
--- | Lookup the given character names and obtain their IDs
-lookupCharacterIDs :: [CharacterName] -> IO [(CharacterName, CharacterID)]
-lookupCharacterIDs charNames = do
-  sem <- apiSem
-  concat <$> parmap sem _lookupCharacterIDs (chunksOf xmlApiChunkSize charNames)
-
-apiSem :: IO (MSem Int)
-apiSem = new xmlApiConnections
-
-_lookupCharacterIDs :: [CharacterName] -> IO [(CharacterName, CharacterID)]
-_lookupCharacterIDs charNames =
-  timedDebug (sformat ("lookupCharacterIDs: looking up " % int % " names")
-                     (length charNames))
-             (parseXMLBody <$> (getURL . characterIDUrl) charNames)
-
 
 characterIDUrl :: [CharacterName] -> String
 characterIDUrl charNames = urlWithNames where

@@ -40,7 +40,6 @@ import qualified Data.Map.Strict         as M
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import           Data.Typeable           (Typeable)
-import           Eve.Api.Cache           (Cached (..))
 import           Eve.Api.Config
 import           Eve.Api.Esi
 import           Eve.Api.Types
@@ -59,8 +58,20 @@ data HttpClientF next
   | GetCharacterIDChunk [CharacterName] (HttpClientResult [(CharacterName, CharacterID)] -> next)
   -- to allow logging from HttpClient monad
   | TimedDebugMessage Text next
+  | DebugMessage Text next
   -- guard it with a semaphore
   | GuardSemaphore (MSem Int) next
+  -- XXX; with additional type arguments, we are in a different monad :(
+  | CachedID [CharacterName] (([(CharacterName, CharacterID)], [CharacterName]) -> next)
+  | PutCachedID [(CharacterName, CharacterID)] next
+  | CachedCharacter CharacterID (Maybe CharacterInfo -> next)
+  | PutCachedCharacter CharacterID CharacterInfo next
+  | CachedCorporation CorporationID (Maybe CorporationInfo -> next)
+  | PutCachedCorporation CorporationID CorporationInfo next
+  | CachedAlliance AllianceID (Maybe AllianceInfo -> next)
+  | PutCachedAlliance AllianceID AllianceInfo next
+  | CachedStats CharacterID (Maybe KillboardStats -> next)
+  | PutCachedStats CharacterID KillboardStats next
   deriving (Show, Functor)
 
 instance Show (MSem Int) where
@@ -90,7 +101,7 @@ type HttpClient = Free HttpClientF
 
 getCharacterInfo :: CharacterID -> HttpClient (HttpClientResult CharacterInfo)
 getCharacterInfo k =
-  getClientResult esiApiSem
+  getClientResult cachedCharacter putCachedCharacter esiApiSem
                   (sformat ("looking up character " % int) (_characterID k))
                   charInfoUrl
                   decodeClientResult
@@ -98,7 +109,7 @@ getCharacterInfo k =
 
 getCorporationInfo :: CorporationID -> HttpClient (HttpClientResult CorporationInfo)
 getCorporationInfo k =
-  getClientResult esiApiSem
+  getClientResult cachedCorporation putCachedCorporation esiApiSem
                 (sformat ("looking up corporation " % int) (_corporationID k))
                 corpInfoUrl
                 decodeClientResult
@@ -106,7 +117,7 @@ getCorporationInfo k =
 
 getAllianceInfo :: AllianceID -> HttpClient (HttpClientResult AllianceInfo)
 getAllianceInfo k =
-  getClientResult esiApiSem
+  getClientResult cachedAlliance putCachedAlliance esiApiSem
                 (sformat ("looking up alliance " % int) (_allianceID k))
                 allianceInfoUrl
                 decodeClientResult
@@ -114,17 +125,23 @@ getAllianceInfo k =
 
 getKillboardStats :: CharacterID -> HttpClient (HttpClientResult KillboardStats)
 getKillboardStats k =
-  getClientResult zkillApiSem
+  getClientResult cachedStats putCachedStats zkillApiSem
                 (sformat ("looking up killboard " % int) (_characterID k))
                 zkillStatUrl
                 decodeClientResult
                 k
 
-getClientResult sem msg toUrl decodeResult k = do
-  guardSemaphore sem
-  timedDebugMessage msg
-  result <- httpGet (toUrl k)
-  return $ decodeResult result
+getClientResult getCache putCache sem msg toUrl decodeResult k = do
+  cached <- getCache k
+  case cached of
+    Just x -> return $ Right x
+    Nothing -> do
+      guardSemaphore sem
+      timedDebugMessage msg
+      bytes <- httpGet (toUrl k)
+      let result = decodeResult bytes
+      mapM_ (putCache k) result
+      return result
 
 
 decodeClientResult :: FromJSON a => HttpClientResult L.ByteString -> HttpClientResult a
@@ -138,8 +155,12 @@ decodeClientResult result =
 -- | get the character ids for the named characters
 getCharacterID :: [CharacterName] -> HttpClient (HttpClientResult [(CharacterName, CharacterID)])
 getCharacterID names = do
-  let chunks = chunksOf xmlApiChunkSize names
-  fold <$> traverse guardedCharIDChunk chunks
+  (known, unknown) <- cachedID names
+  debugMessage $ sformat ("known/unknown: " % int % "/" % int) (length known) (length unknown)
+  let chunks = chunksOf xmlApiChunkSize unknown
+  result <- fold <$> traverse guardedCharIDChunk chunks
+  mapM_ putCachedID result
+  return $ (known ++) <$> result
 
 guardedCharIDChunk names = do
   guardSemaphore xmlApiSem

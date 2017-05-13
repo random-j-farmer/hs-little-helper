@@ -13,22 +13,30 @@ License:     MIT
 module Eve.Api.Interp
   ( runHttpClientIO
   , runTestIO
+  , dumpCaches
+  , loadCaches
   , loadIOCaches
   )
 where
 
 import           Control.Concurrent.MSem     (MSem (..), new, signal, wait)
+import           Control.Concurrent.MVar     (MVar (..), modifyMVar_, newMVar,
+                                              readMVar)
 import           Control.Exception           (bracket_, catch, throw)
-import           Control.Logging             (debug, timedDebug)
+import           Control.Logging             (debug, timedDebug, withStdoutLogging)
 import           Control.Monad.Free
-import           Data.Aeson                  (FromJSON (..), eitherDecode,
-                                              encode)
+import           Data.Aeson
+import           Data.Aeson.Types
 import qualified Data.ByteString.Lazy        as L
+import           Data.Either                 (partitionEithers)
 import           Data.Foldable               (fold)
 import qualified Data.Map.Strict             as M
+import           Data.Maybe                  (fromJust)
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
-import           Eve.Api.Cache               (Cached (..))
+import           Data.Time.Clock             (DiffTime, UTCTime, diffUTCTime,
+                                              getCurrentTime)
+import           Data.Tuple                  (swap)
 import           Eve.Api.Config
 import           Eve.Api.Esi
 import           Eve.Api.Http
@@ -38,6 +46,7 @@ import           Eve.Api.Zkill
 import           Formatting                  (int, sformat, stext, string, (%))
 import           Network.HTTP.Client         (HttpException)
 import           Network.HTTP.Client.CertMan (getURL)
+import           System.IO.Unsafe            (unsafePerformIO)
 
 -- | interprets the http client monad, performing real io
 runHttpClientIO :: HttpClient a -> IO a
@@ -46,8 +55,18 @@ runHttpClientIO = iterM run where
   run (HttpGet url f)               = getURLEither url >>= f
   run (GetCharacterIDChunk names f) = getCharIDChunkIO names >>= f
   run (TimedDebugMessage msg f)     = timedDebug msg f
+  run (DebugMessage msg f)          = debug msg >> f
   run (GuardSemaphore sem f)        = guardIO sem f
-
+  run (CachedID names f)            = cachedCharacterID names >>= f
+  run (PutCachedID tuples f)        = putCachedCharacterID tuples >> f
+  run (CachedCharacter k f)         = validCache characterInfoCache k >>= f
+  run (PutCachedCharacter k v f)    = putCurrentCache characterInfoCache k v >> f
+  run (CachedCorporation k f)       = validCache corporationInfoCache k >>= f
+  run (PutCachedCorporation k v f)  = putCurrentCache corporationInfoCache k v >> f
+  run (CachedAlliance k f)          = validCache allianceInfoCache k >>= f
+  run (PutCachedAlliance k v f)     = putCurrentCache allianceInfoCache k v >> f
+  run (CachedStats k f)             = validCache killboardStatCache k >>= f
+  run (PutCachedStats k v f)        = putCurrentCache killboardStatCache k v >> f
 
 guardIO sem =
   bracket_
@@ -76,7 +95,18 @@ runTestIO ioCache = iterM run where
   run :: HttpClientF (IO a) -> IO a
   run (HttpGet url f)               = fakeURLEither ioCache url >>= f
   run (TimedDebugMessage msg f)     = timedDebug msg f
+  run (DebugMessage msg f)          = debug msg >> f
   run (GuardSemaphore sem f)        = guardIO sem f
+  run (CachedID names f)            = f ([], names)
+  run (PutCachedID _ f)             = f
+  run (CachedCharacter k f)         = f Nothing
+  run (PutCachedCharacter k v f)    = f
+  run (CachedCorporation k f)       = f Nothing
+  run (PutCachedCorporation k v f)  = f
+  run (CachedAlliance k f)          = f Nothing
+  run (PutCachedAlliance k v f)     = f
+  run (CachedStats k f)             = f Nothing
+  run (PutCachedStats k v f)        = f
   run (GetCharacterIDChunk names f) = do
     results <- traverse (\x -> getCharIDChunkIO [x]) names
     f $ fold results
@@ -87,7 +117,113 @@ fakeURLEither ioCache url =
       Nothing -> Left $ OtherError $ "not cached: " ++ url
       Just x  -> Right x
 
--- | Loads IO Cache for runTestIO
+-- | Cached information with a cache lifetime
+data Cached a =
+  Cached
+  { cachedInfo :: a
+  , cachedTime :: UTCTime
+  } deriving (Show)
+instance ToJSON a => ToJSON (Cached a) where
+  toJSON (Cached info time) = object ["cachedInfo" .= toJSON info, "cachedTime" .= toJSON time]
+instance FromJSON a => FromJSON (Cached a) where
+  parseJSON (Object v) = Cached <$>
+                        v .: "cachedInfo" <*>
+                        v .: "cachedTime"
+
+idByName :: MVar (M.Map CharacterName CharacterID)
+{-# NOINLINE idByName #-}
+idByName = unsafePerformIO $ do
+  debug "initialized character id cache"
+  newMVar M.empty
+
+type CacheMap k v = M.Map k (Cached v)
+type CacheMVar k v = MVar (CacheMap k v)
+
+characterInfoCache :: CacheMVar CharacterID CharacterInfo
+{-# NOINLINE characterInfoCache #-}
+characterInfoCache = unsafePerformIO $ do
+  debug "characterInfoCache - initializing cache"
+  newMVar M.empty
+
+corporationInfoCache :: CacheMVar CorporationID CorporationInfo
+{-# NOINLINE corporationInfoCache #-}
+corporationInfoCache = unsafePerformIO $ do
+  debug "corporationInfoCache - initializing cache"
+  newMVar M.empty
+
+allianceInfoCache :: CacheMVar AllianceID AllianceInfo
+{-# NOINLINE allianceInfoCache #-}
+allianceInfoCache = unsafePerformIO $ do
+  debug "allianceInfoCache - initializing cache"
+  newMVar M.empty
+
+killboardStatCache :: CacheMVar CharacterID KillboardStats
+{-# NOINLINE killboardStatCache #-}
+killboardStatCache = unsafePerformIO $ do
+  debug "killboardStatCache - initializing cache"
+  newMVar M.empty
+
+validCache mvar k = do
+  m <- readMVar mvar
+  now <- getCurrentTime
+  return $ M.lookup k m >>= filterOutdated now
+
+putCurrentCache mvar k v = do
+  now <- getCurrentTime
+  modifyMVar_ mvar $ return . M.insert k (Cached v now)
+  return ()
+
+cachedCharacterID names = do
+  byName <- readMVar idByName
+  return $ knownAndUnknown byName names
+
+putCachedCharacterID tuples =
+  modifyMVar_ idByName $ return . M.union (M.fromList tuples)
+
+knownAndUnknown m ks =
+  swap (partitionEithers (lookupEither m <$> ks))
+
+lookupEither m k =
+  case M.lookup k m of
+    Nothing -> Left k
+    Just a  -> Right (k, a)
+
+cacheSeconds :: Double
+cacheSeconds = 3*3600
+
+filterOutdated now ca =
+  if realToFrac delta < cacheSeconds
+    then Just (cachedInfo ca)
+    else Nothing
+  where delta = diffUTCTime now (cachedTime ca)
+
+-- | dump the caches to the dump directory
+dumpCaches :: IO ()
+dumpCaches = do
+  dumpCache idByName "dump/id_by_name.json"
+  dumpCache characterInfoCache "dump/characters.json"
+  dumpCache corporationInfoCache "dump/corporations.json"
+  dumpCache allianceInfoCache "dump/alliances.json"
+  dumpCache killboardStatCache "dump/killboards.json"
+
+-- | Load the caches from the dump directory
+loadCaches :: IO ()
+loadCaches = withStdoutLogging $ do
+  loadCache idByName "dump/id_by_name.json"
+  loadCache characterInfoCache "dump/characters.json"
+  loadCache corporationInfoCache "dump/corporations.json"
+  loadCache allianceInfoCache "dump/alliances.json"
+  loadCache killboardStatCache "dump/killboards.json"
+
+dumpCache mvar fn = do
+  m <- readMVar mvar
+  L.writeFile fn $ encode m
+
+loadCache mvar fn = do
+  loaded  <- (fromJust . decode) <$> L.readFile fn
+  modifyMVar_ mvar (return . M.union loaded)
+
+-- | Loads the caches from the dump directory for runTestIO
 loadIOCaches :: IO (M.Map String L.ByteString)
 loadIOCaches = do
   ids <- (fromRight . eitherDecode) <$> L.readFile "dump/id_by_name.json" :: IO (M.Map CharacterName CharacterID)
