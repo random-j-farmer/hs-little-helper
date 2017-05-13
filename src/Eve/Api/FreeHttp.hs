@@ -12,9 +12,28 @@ Copyright:   2017 Random J Farmer
 License:     MIT
 -}
 
-module Eve.Api.FreeHttp where
+module Eve.Api.FreeHttp
+  ( HttpClientF(..)
+  , HttpClient(..)
+  , HttpClientResult(..)
+  , HttpClientException(..)
+  -- primitives maybe not?
+  , httpGet
+  , timedDebugMessage
+  , guardSemaphore
+  , getCharacterID
+  , getCharacterInfo
+  , getCorporationInfo
+  , getAllianceInfo
+  , getKillboardStats
+  , runHttpClientIO
+  , runTestIO
+  , loadIOCaches)
+where
 
-import           Control.Exception           (catch, throw)
+import           Control.Concurrent.MSem     (MSem (..), signal, wait, new)
+import           Control.Exception           (bracket_, catch, throw)
+import           Control.Logging             (debug, timedDebug)
 import           Control.Monad.Free
 import           Control.Monad.Free.TH       (makeFree)
 import           Data.Aeson                  (FromJSON (..), eitherDecode,
@@ -24,6 +43,8 @@ import           Data.Foldable               (fold)
 import           Data.List.Split             (chunksOf)
 import qualified Data.Map.Strict             as M
 import           Data.Maybe                  (fromJust)
+import           Data.Text                   (Text)
+import qualified Data.Text                   as T
 import           Data.Typeable               (Typeable)
 import           Eve.Api.Cache               (Cached (..))
 import           Eve.Api.Config
@@ -31,17 +52,26 @@ import           Eve.Api.Esi
 import           Eve.Api.Types
 import           Eve.Api.Xml
 import           Eve.Api.Zkill
+import           Formatting                  (int, sformat, stext, string, (%))
 import           Network.HTTP.Client         (HttpException)
 import           Network.HTTP.Client.CertMan (getURL)
+import           System.IO.Unsafe            (unsafePerformIO)
 import           Text.Show.Functions
 
 
 -- | DSL primitives
 data HttpClientF next
   = HttpGet String (HttpClientResult L.ByteString -> next)
-  -- test version must use different implementation
+  -- test version must use different implementation - can't lookup chunnked names
   | GetCharacterIDChunk [CharacterName] (HttpClientResult [(CharacterName, CharacterID)] -> next)
+  -- to allow logging from HttpClient monad
+  | TimedDebugMessage Text next
+  -- guard it with a semaphore
+  | GuardSemaphore (MSem Int) next
   deriving (Show, Functor)
+
+instance Show (MSem Int) where
+  show _ = "MSem"
 
 type HttpClientResult = Either HttpClientException
 
@@ -64,15 +94,45 @@ makeFree ''HttpClientF
 
 type HttpClient = Free HttpClientF
 
+
 getCharacterInfo :: CharacterID -> HttpClient (HttpClientResult CharacterInfo)
-getCharacterInfo charId = do
-  result <- httpGet (charInfoUrl charId)
-  return $ decodeClientResult result
+getCharacterInfo k =
+  getClientResult esiApiSem
+                  (sformat ("looking up character " % int) (_characterID k))
+                  charInfoUrl
+                  decodeClientResult
+                  k
 
 getCorporationInfo :: CorporationID -> HttpClient (HttpClientResult CorporationInfo)
-getCorporationInfo corpId = do
-  result <- httpGet (corpInfoUrl corpId)
-  return $ decodeClientResult result
+getCorporationInfo k =
+  getClientResult esiApiSem
+                (sformat ("looking up corporation " % int) (_corporationID k))
+                corpInfoUrl
+                decodeClientResult
+                k
+
+getAllianceInfo :: AllianceID -> HttpClient (HttpClientResult AllianceInfo)
+getAllianceInfo k =
+  getClientResult esiApiSem
+                (sformat ("looking up alliance " % int) (_allianceID k))
+                allianceInfoUrl
+                decodeClientResult
+                k
+
+getKillboardStats :: CharacterID -> HttpClient (HttpClientResult KillboardStats)
+getKillboardStats k =
+  getClientResult zkillApiSem
+                (sformat ("looking up killboard " % int) (_characterID k))
+                zkillStatUrl
+                decodeClientResult
+                k
+
+getClientResult sem msg toUrl decodeResult k = do
+  guardSemaphore sem
+  timedDebugMessage msg
+  result <- httpGet (toUrl k)
+  return $ decodeResult result
+
 
 decodeClientResult :: FromJSON a => HttpClientResult L.ByteString -> HttpClientResult a
 decodeClientResult result =
@@ -82,18 +142,38 @@ decodeClientResult result =
       Left str -> Left $ DecodeError str
       Right a  -> Right a
 
+-- | get the character ids for the named characters
+getCharacterID :: [CharacterName] -> HttpClient (HttpClientResult [(CharacterName, CharacterID)])
+getCharacterID names = do
+  let chunks = chunksOf xmlApiChunkSize names
+  fold <$> traverse guardedCharIDChunk chunks
+
+guardedCharIDChunk names = do
+  guardSemaphore xmlApiSem
+  getCharacterIDChunk names
+
 runHttpClientIO :: HttpClient a -> IO a
 runHttpClientIO = iterM run where
   run :: HttpClientF (IO a) -> IO a
   run (HttpGet url f)               = getURLEither url >>= f
-  run (GetCharacterIDChunk names f) = getCharIDChunk names >>= f
+  run (GetCharacterIDChunk names f) = getCharIDChunkIO names >>= f
+  run (TimedDebugMessage msg f)     = timedDebug msg f
+  run (GuardSemaphore sem f)        = guardIO sem f
 
-getCharIDChunk names = do
-  let url = characterIDUrl names
-  result <- runHttpClientIO $ httpGet url
-  return $ case result of
-    Left x   -> Left x
-    Right bs -> Right $ parseXMLBody bs
+
+guardIO sem =
+  bracket_
+    (wait sem >> debug "acquired semaphore")
+    (debug "releasing semaphore" >> signal sem)
+
+getCharIDChunkIO names =
+  timedDebug (sformat ("looking up character ids: " % int % " names")
+                      (length names)) $ do
+    let url = characterIDUrl names
+    result <- runHttpClientIO $ httpGet url
+    return $ case result of
+      Left x   -> Left x
+      Right bs -> Right $ parseXMLBody bs
 
 getURLEither :: String -> IO (HttpClientResult L.ByteString)
 getURLEither url = do
@@ -105,10 +185,11 @@ getURLEither url = do
 runTestIO :: M.Map String L.ByteString -> HttpClient a -> IO a
 runTestIO ioCache = iterM run where
   run :: HttpClientF (IO a) -> IO a
-  run (HttpGet url f) = fakeURLEither ioCache url >>= f
+  run (HttpGet url f)               = fakeURLEither ioCache url >>= f
+  run (TimedDebugMessage msg f)     = timedDebug msg f
+  run (GuardSemaphore sem f)        = guardIO sem f
   run (GetCharacterIDChunk names f) = do
-    results <- traverse (\x -> getCharIDChunk [x]) names
-    -- sequence ((\x -> getCharIDChunk [x]) <$> names)
+    results <- traverse (\x -> getCharIDChunkIO [x]) names
     f $ fold results
 
 fakeURLEither :: M.Map String L.ByteString -> String -> IO (HttpClientResult L.ByteString)
@@ -116,6 +197,26 @@ fakeURLEither ioCache url =
     return $ case M.lookup url ioCache of
       Nothing -> Left $ OtherError $ "not cached: " ++ url
       Just x  -> Right x
+
+
+xmlApiSem :: MSem Int
+{-# NOINLINE xmlApiSem #-}
+xmlApiSem = unsafePerformIO $ do
+  debug "Initalizing XML API Semaphore"
+  new xmlApiConnections
+
+esiApiSem :: MSem Int
+{-# NOINLINE esiApiSem #-}
+esiApiSem = unsafePerformIO $ do
+  debug "Initalizing ESI Semaphore"
+  new esiConnections
+
+zkillApiSem :: MSem Int
+{-# NOINLINE zkillApiSem #-}
+zkillApiSem = unsafePerformIO $ do
+  debug "Initalizing Zkill API Semaphore"
+  new zkillConnections
+
 
 loadIOCaches :: IO (M.Map String L.ByteString)
 loadIOCaches = do

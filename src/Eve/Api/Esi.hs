@@ -47,16 +47,16 @@ import           Network.URL                 (add_param, exportURL, importURL)
 -}
 
 data CharacterInfo = CharacterInfo
-  { ciCorporationId  :: CorporationID
-  , ciBirthday       :: Text
-  , ciName           :: Text
-  , ciGender         :: Text
-  , ciRaceId         :: Integer
-  , ciBloodlineId    :: Integer
-  , ciDescription    :: Text
+  { ciCorporationId  :: ! CorporationID
+  , ciBirthday       :: ! Text
+  , ciName           :: ! Text
+  , ciGender         :: ! Text
+  , ciRaceId         :: ! Integer
+  , ciBloodlineId    :: ! Integer
+  , ciDescription    :: ! Text
   , ciAllianceId     :: Maybe AllianceID
-  , ciAncestryId     :: Integer
-  , ciSecurityStatus :: Double
+  , ciAncestryId     :: ! Integer
+  , ciSecurityStatus :: ! Double
   } deriving (Show, Generic)
 
 instance ToJSON CharacterInfo where
@@ -80,14 +80,14 @@ instance FromJSON CharacterInfo where
   }
 -}
 data CorporationInfo = CorporationInfo
-  { coCorporationName        :: Text
-  , coTicker                 :: Text
-  , coMemberCount            :: Int
-  , coCeoID                  :: CharacterID
-  , coCorporationDescription :: Text
-  , coTaxRate                :: Double
-  , coCreatorID              :: CharacterID
-  , coUrl                    :: Text
+  { coCorporationName        :: ! Text
+  , coTicker                 :: ! Text
+  , coMemberCount            :: ! Int
+  , coCeoID                  :: ! CharacterID
+  , coCorporationDescription :: ! Text
+  , coTaxRate                :: ! Double
+  , coCreatorID              :: ! CharacterID
+  , coUrl                    :: ! Text
   , coAllianceID             :: Maybe AllianceID
   , coCreationDate           :: Maybe Text
   , coFaction                :: Maybe Text
@@ -108,10 +108,10 @@ instance FromJSON CorporationInfo where
 }
 -}
 data AllianceInfo = AllianceInfo
-  { aiAllianceName :: Text
-  , aiTicker       :: Text
-  , aiDateFounded  :: Text
-  , aiExecutorCorp :: Integer
+  { aiAllianceName :: ! Text
+  , aiTicker       :: ! Text
+  , aiDateFounded  :: ! Text
+  , aiExecutorCorp :: ! Integer
   } deriving (Show, Generic)
 
 instance ToJSON AllianceInfo where

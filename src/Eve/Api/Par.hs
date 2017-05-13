@@ -21,7 +21,7 @@ import           Control.Logging          (debug)
 parmap :: Traversable t => MSem Int -> (a -> IO b) -> t a -> IO (t b)
 parmap sem = mapConcurrently . guarded sem
 
-guarded :: MSem Int -> (a -> IO b) -> (a -> IO b)
+guarded :: MSem Int -> (a -> IO b) -> a -> IO b
 guarded sem fun a =
   bracket
     (waitAndReturn sem)

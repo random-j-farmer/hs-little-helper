@@ -14,6 +14,7 @@ module Eve.Api.Config ( certificateStore
                       , xmlApiChunkSize
                       , esiConnections
                       , esiDatasource
+                      , zkillConnections
                       )
 where
 

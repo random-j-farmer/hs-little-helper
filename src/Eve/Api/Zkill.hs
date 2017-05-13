@@ -40,7 +40,7 @@ import           Network.URL                 (URL (..), exportURL, importURL)
 -- | ZKillboard Killboard Statistics for a Pilot
 data KillboardStats =
   KillboardStats
-    { ksid             :: CharacterID
+    { ksid             :: ! CharacterID
     , ksiskDestroyed   :: Maybe Double
     , ksiskLost        :: Maybe Double
     , ksshipsDestroyed :: Maybe Int
@@ -49,7 +49,7 @@ data KillboardStats =
     , kssoloLosses     :: Maybe Int
     , ksactivePvp      :: Maybe ActivePvp
     , ksmonths         :: M.Map Text KillboardMonth
-    , ksinfo           :: ZkillInfo
+    , ksinfo           :: ! ZkillInfo
     } deriving (Show, Generic)
 instance ToJSON KillboardStats where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 2}
@@ -60,9 +60,9 @@ instance FromJSON KillboardStats where
 -- | Active Pvp info - number of kills/ships/systems in last 7 days
 data ActivePvp =
   ActivePvp
-    { apships   :: ActivePvpShips
-    , apsystems :: ActivePvpSystems
-    , apkills   :: ActivePvpKills
+    { apships   :: ! ActivePvpShips
+    , apsystems :: ! ActivePvpSystems
+    , apkills   :: ! ActivePvpKills
     } deriving (Show, Generic)
 instance ToJSON ActivePvp where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 2}
@@ -90,8 +90,8 @@ instance FromJSON ActivePvpKills where
 
 data KillboardMonth =
   KillboardMonth
-    { kmyear           :: Int
-    , kmmonth          :: Int
+    { kmyear           :: ! Int
+    , kmmonth          :: ! Int
     , kmshipsDestroyed :: Maybe Int
     , kmshipsLost      :: Maybe Int
     , kmiskDestroyed   :: Maybe Double
@@ -106,11 +106,11 @@ instance FromJSON KillboardMonth where
 data ZkillInfo =
   ZkillInfo
     { ziallianceID    :: Maybe AllianceID
-    , zicorporationID :: CorporationID
-    , zifactionID     :: Int
-    , zikillID        :: Integer
-    , ziname          :: Text
-    , zisecStatus     :: Double
+    , zicorporationID :: ! CorporationID
+    , zifactionID     :: ! Int
+    , zikillID        :: ! Integer
+    , ziname          :: ! Text
+    , zisecStatus     :: ! Double
     } deriving (Show, Generic)
 instance ToJSON ZkillInfo where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 2}
