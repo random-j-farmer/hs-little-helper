@@ -36,7 +36,7 @@ import           System.Environment          (lookupEnv)
 import           Text.XML.Expat.Proc         (findChild, findChildren)
 import           Text.XML.Expat.Tree         (UNode, XMLParseError,
                                               defaultParseOptions, getAttribute,
-                                              parseThrowing)
+                                              parse)
 
 characterIDUrl :: [CharacterName] -> String
 characterIDUrl charNames = urlWithNames where
@@ -44,12 +44,14 @@ characterIDUrl charNames = urlWithNames where
     tuples = (,) "names" . T.unpack . _characterName <$> charNames
     urlWithNames = exportURL $ foldr (flip add_param) url tuples
 
--- XXX: return a either, don't use parseThrowing
-parseXMLBody :: LB.ByteString -> [(CharacterName, CharacterID)]
-parseXMLBody = filter (\x -> _characterID (snd x) /= 0) . extractCharacterIDs . parseXml
+parseXMLBody :: LB.ByteString -> HttpClientResult [(CharacterName, CharacterID)]
+parseXMLBody body =
+  case parseXml body of
+    (_, Just x) -> Left $ HttpClientXmlParseError x
+    (x, _) -> Right $ extractCharacterIDs x
 
-parseXml :: LB.ByteString -> UNode Text
-parseXml = parseThrowing defaultParseOptions
+parseXml :: LB.ByteString -> (UNode Text, Maybe XMLParseError)
+parseXml = parse defaultParseOptions
 
 {-
 <?xml version='1.0' encoding='UTF-8'?>
@@ -65,7 +67,8 @@ parseXml = parseThrowing defaultParseOptions
 -}
 extractCharacterIDs :: UNode Text -> [(CharacterName, CharacterID)]
 extractCharacterIDs rootNode =
-  row2pair <$> rows
+  filter (\x -> _characterID (snd x) /= 0)
+         (row2pair <$> rows)
   where rows = (findChildren "row" . child "rowset" . child "result") rootNode
         row2pair node = ( characterName $ attr "name" node
                         , CharacterID . read $ T.unpack $ attr "characterID" node)

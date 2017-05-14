@@ -22,8 +22,10 @@ where
 import           Control.Concurrent.MSem     (MSem (..), new, signal, wait)
 import           Control.Concurrent.MVar     (MVar (..), modifyMVar_, newMVar,
                                               readMVar)
+import           Control.DeepSeq             (NFData, deepseq)
 import           Control.Exception           (bracket_, catch, throw)
-import           Control.Logging             (debug, timedDebug, withStdoutLogging)
+import           Control.Logging             (debug, timedDebug,
+                                              withStdoutLogging)
 import           Control.Monad.Free
 import           Data.Aeson
 import           Data.Aeson.Types
@@ -47,16 +49,15 @@ import           Formatting                  (int, sformat, stext, string, (%))
 import           Network.HTTP.Client         (HttpException)
 import           Network.HTTP.Client.CertMan (getURL)
 import           System.IO.Unsafe            (unsafePerformIO)
+import           Unsafe.Coerce               (unsafeCoerce)
 
 -- | interprets the http client monad, performing real io
 runHttpClientIO :: HttpClient a -> IO a
 runHttpClientIO = iterM run where
   run :: HttpClientF (IO a) -> IO a
-  run (HttpGet url f)               = getURLEither url >>= f
-  run (GetCharacterIDChunk names f) = getCharIDChunkIO names >>= f
-  run (TimedDebugMessage msg f)     = timedDebug msg f
+  run (HttpGet sem url f)           = getURLEither sem url >>= f
+  run (GetCharacterIDChunk names f) = getCharIDChunkIO runHttpClientIO names >>= f
   run (DebugMessage msg f)          = debug msg >> f
-  run (GuardSemaphore sem f)        = guardIO sem f
   run (CachedID names f)            = cachedCharacterID names >>= f
   run (PutCachedID tuples f)        = putCachedCharacterID tuples >> f
   run (CachedCharacter k f)         = validCache characterInfoCache k >>= f
@@ -68,22 +69,23 @@ runHttpClientIO = iterM run where
   run (CachedStats k f)             = validCache killboardStatCache k >>= f
   run (PutCachedStats k v f)        = putCurrentCache killboardStatCache k v >> f
 
-guardIO sem =
+guardIO :: MSem Int -> String -> IO a -> IO a
+guardIO sem ctx =
   bracket_
-    (wait sem >> debug "acquired semaphore")
-    (debug "releasing semaphore" >> signal sem)
+    (wait sem >> debug (sformat ("acquired semaphore: " % string) ctx))
+    (debug (sformat ("releasing semaphore: " % string) ctx) >> signal sem)
 
-getCharIDChunkIO names =
-  timedDebug (sformat ("looking up character ids: " % int % " names")
-                      (length names)) $ do
-    let url = characterIDUrl names
-    result <- runHttpClientIO $ httpGet url
-    return $ case result of
-      Left x   -> Left x
-      Right bs -> Right $ parseXMLBody bs
+getCharIDChunkIO runner names = do
+  debug (sformat ("looking up character ids: " % int % " names")
+                      (length names))
+  let url = characterIDUrl names
+  result <- runner $ httpGet xmlApiSem url
+  return $ case result of
+    Left x   -> Left x
+    Right bs -> parseXMLBody bs
 
-getURLEither :: String -> IO (HttpClientResult L.ByteString)
-getURLEither url = do
+getURLEither :: MSem Int -> String -> IO (HttpClientResult L.ByteString)
+getURLEither sem url = guardIO sem url $ do
     bs <- getURL url
     return (Right bs)
   `catch`
@@ -93,10 +95,8 @@ getURLEither url = do
 runTestIO :: M.Map String L.ByteString -> HttpClient a -> IO a
 runTestIO ioCache = iterM run where
   run :: HttpClientF (IO a) -> IO a
-  run (HttpGet url f)               = fakeURLEither ioCache url >>= f
-  run (TimedDebugMessage msg f)     = timedDebug msg f
+  run (HttpGet sem url f)           = fakeURLEither ioCache sem url >>= f
   run (DebugMessage msg f)          = debug msg >> f
-  run (GuardSemaphore sem f)        = guardIO sem f
   run (CachedID names f)            = f ([], names)
   run (PutCachedID _ f)             = f
   run (CachedCharacter k f)         = f Nothing
@@ -107,15 +107,21 @@ runTestIO ioCache = iterM run where
   run (PutCachedAlliance k v f)     = f
   run (CachedStats k f)             = f Nothing
   run (PutCachedStats k v f)        = f
-  run (GetCharacterIDChunk names f) = do
-    results <- traverse (\x -> getCharIDChunkIO [x]) names
-    f $ fold results
+  run (GetCharacterIDChunk names f) = fakeCharIDChunkIO ioCache names >>= f
 
-fakeURLEither :: M.Map String L.ByteString -> String -> IO (HttpClientResult L.ByteString)
-fakeURLEither ioCache url =
-    return $ case M.lookup url ioCache of
-      Nothing -> Left $ OtherError $ "not cached: " ++ url
-      Just x  -> Right x
+fakeURLEither :: M.Map String L.ByteString -> MSem Int -> String -> IO (HttpClientResult L.ByteString)
+fakeURLEither ioCache sem url = guardIO sem url $
+  return $ case M.lookup url ioCache of
+    Nothing -> Left $ OtherError $ "not cached: " ++ url
+    Just x  -> Right x
+
+fakeCharIDChunkIO ioCache names = do
+  results <- traverse fakeCharID names
+  (return . fold) results
+  where
+    fakeCharID name =
+      runTestIO ioCache (fmap (dec name) <$> httpGet xmlApiSem (characterIDUrl [name]))
+    dec name bytes = [(name, (CharacterID . fromJust . decode) bytes)]
 
 -- | Cached information with a cache lifetime
 data Cached a =
@@ -233,10 +239,10 @@ loadIOCaches = do
   killboard <- (fromRight . eitherDecode) <$> L.readFile "dump/killboards.json" :: IO (M.Map CharacterID (Cached Eve.Api.Zkill.KillboardStats))
   return $ Prelude.foldr M.union M.empty
     [ enc (\x -> characterIDUrl [x]) ids
-    , enc charInfoUrl infos
-    , enc corpInfoUrl corps
-    , enc allianceInfoUrl alliances
-    , enc zkillStatUrl killboard
+    , enc charInfoUrl (cachedInfo <$> infos)
+    , enc corpInfoUrl (cachedInfo <$> corps)
+    , enc allianceInfoUrl (cachedInfo <$> alliances)
+    , enc zkillStatUrl (cachedInfo <$> killboard)
     ]
   where
     enc f = M.map encode . M.mapKeys f

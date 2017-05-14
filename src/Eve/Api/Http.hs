@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverloadedStrings    #-}
@@ -17,19 +18,22 @@ module Eve.Api.Http
   , HttpClient(..)
   , HttpClientResult(..)
   , HttpClientException(..)
+  , ApiCombinator(..)
   , httpGet
-  , timedDebugMessage
-  , guardSemaphore
+  , xmlApiSem
   , getCharacterID
   , getCharacterInfo
   , getCorporationInfo
   , getAllianceInfo
   , getKillboardStats
+  , combinedLookup
   )
 where
 
 import           Control.Concurrent.MSem (MSem (..), new)
+import           Control.DeepSeq         (NFData(..))
 import           Control.Logging         (debug, timedDebug)
+import           Control.Monad           (join)
 import           Control.Monad.Free
 import           Control.Monad.Free.TH   (makeFree)
 import           Data.Aeson              (FromJSON (..), eitherDecode, encode)
@@ -39,28 +43,23 @@ import           Data.List.Split         (chunksOf)
 import qualified Data.Map.Strict         as M
 import           Data.Text               (Text)
 import qualified Data.Text               as T
-import           Data.Typeable           (Typeable)
 import           Eve.Api.Config
 import           Eve.Api.Esi
 import           Eve.Api.Types
 import           Eve.Api.Xml
 import           Eve.Api.Zkill
 import           Formatting              (int, sformat, stext, string, (%))
-import           Network.HTTP.Client     (HttpException)
+import           GHC.Generics
 import           System.IO.Unsafe        (unsafePerformIO)
 import           Text.Show.Functions
 
-
 -- | DSL primitives
 data HttpClientF next
-  = HttpGet String (HttpClientResult L.ByteString -> next)
+  = HttpGet (MSem Int) String (HttpClientResult L.ByteString -> next)
   -- test version must use different implementation - can't lookup chunnked names
   | GetCharacterIDChunk [CharacterName] (HttpClientResult [(CharacterName, CharacterID)] -> next)
   -- to allow logging from HttpClient monad
-  | TimedDebugMessage Text next
   | DebugMessage Text next
-  -- guard it with a semaphore
-  | GuardSemaphore (MSem Int) next
   -- XXX; with additional type arguments, we are in a different monad :(
   | CachedID [CharacterName] (([(CharacterName, CharacterID)], [CharacterName]) -> next)
   | PutCachedID [(CharacterName, CharacterID)] next
@@ -72,27 +71,13 @@ data HttpClientF next
   | PutCachedAlliance AllianceID AllianceInfo next
   | CachedStats CharacterID (Maybe KillboardStats -> next)
   | PutCachedStats CharacterID KillboardStats next
-  deriving (Show, Functor)
+  deriving (Show, Functor, Generic)
 
 instance Show (MSem Int) where
   show _ = "MSem"
-
-type HttpClientResult = Either HttpClientException
-
-instance Monoid a => Monoid (HttpClientResult a) where
-  mempty = Right   mempty
-  mappend x y = case (x,y) of
-    (Right x', Right y') -> Right $ x' `mappend` y'
-    (Left x', _)         -> Left x'
-    (_, Left y')         -> Left y'
-
-
--- | The exceptions we handle
-data HttpClientException
-  = HttpClientError HttpException
-  | DecodeError String
-  | OtherError String
-  deriving (Show, Typeable)
+instance NFData (MSem Int) where
+  rnf _ = ()
+instance NFData a => NFData (HttpClientF a)
 
 makeFree ''HttpClientF
 
@@ -104,7 +89,7 @@ getCharacterInfo k =
   getClientResult cachedCharacter putCachedCharacter esiApiSem
                   (sformat ("looking up character " % int) (_characterID k))
                   charInfoUrl
-                  decodeClientResult
+                  (decodeClientResult (show k))
                   k
 
 getCorporationInfo :: CorporationID -> HttpClient (HttpClientResult CorporationInfo)
@@ -112,23 +97,25 @@ getCorporationInfo k =
   getClientResult cachedCorporation putCachedCorporation esiApiSem
                 (sformat ("looking up corporation " % int) (_corporationID k))
                 corpInfoUrl
-                decodeClientResult
+                (decodeClientResult (show k))
                 k
 
-getAllianceInfo :: AllianceID -> HttpClient (HttpClientResult AllianceInfo)
-getAllianceInfo k =
-  getClientResult cachedAlliance putCachedAlliance esiApiSem
+getAllianceInfo :: Maybe AllianceID -> HttpClient (HttpClientResult (Maybe AllianceInfo))
+getAllianceInfo Nothing = return $ Right Nothing
+getAllianceInfo (Just k) = do
+  let result = getClientResult cachedAlliance putCachedAlliance esiApiSem
                 (sformat ("looking up alliance " % int) (_allianceID k))
                 allianceInfoUrl
-                decodeClientResult
+                (decodeClientResult (show k))
                 k
+  fmap (fmap Just) result
 
 getKillboardStats :: CharacterID -> HttpClient (HttpClientResult KillboardStats)
 getKillboardStats k =
   getClientResult cachedStats putCachedStats zkillApiSem
                 (sformat ("looking up killboard " % int) (_characterID k))
                 zkillStatUrl
-                decodeClientResult
+                (decodeClientResult (show k))
                 k
 
 getClientResult getCache putCache sem msg toUrl decodeResult k = do
@@ -136,20 +123,20 @@ getClientResult getCache putCache sem msg toUrl decodeResult k = do
   case cached of
     Just x -> return $ Right x
     Nothing -> do
-      guardSemaphore sem
-      timedDebugMessage msg
-      bytes <- httpGet (toUrl k)
+      debugMessage msg
+      bytes <- httpGet sem (toUrl k)
       let result = decodeResult bytes
       mapM_ (putCache k) result
       return result
 
 
-decodeClientResult :: FromJSON a => HttpClientResult L.ByteString -> HttpClientResult a
-decodeClientResult result =
+-- | Helper to decode a client result
+decodeClientResult :: FromJSON a => String -> HttpClientResult L.ByteString -> HttpClientResult a
+decodeClientResult errCtx result =
   case result of
     Left x -> Left x
     Right bs -> case eitherDecode bs of
-      Left str -> Left $ DecodeError str
+      Left str -> Left $ DecodeError (errCtx ++ ": " ++ str)
       Right a  -> Right a
 
 -- | get the character ids for the named characters
@@ -158,13 +145,9 @@ getCharacterID names = do
   (known, unknown) <- cachedID names
   debugMessage $ sformat ("known/unknown: " % int % "/" % int) (length known) (length unknown)
   let chunks = chunksOf xmlApiChunkSize unknown
-  result <- fold <$> traverse guardedCharIDChunk chunks
+  result <- fold <$> traverse getCharacterIDChunk chunks
   mapM_ putCachedID result
   return $ (known ++) <$> result
-
-guardedCharIDChunk names = do
-  guardSemaphore xmlApiSem
-  getCharacterIDChunk names
 
 xmlApiSem :: MSem Int
 {-# NOINLINE xmlApiSem #-}
@@ -183,3 +166,30 @@ zkillApiSem :: MSem Int
 zkillApiSem = unsafePerformIO $ do
   debug "Initalizing Zkill API Semaphore"
   new zkillConnections
+
+bindHttpClient :: (a -> HttpClient (HttpClientResult b)) ->  HttpClientResult a -> HttpClient (HttpClientResult b)
+bindHttpClient bindFn result =
+  case result of
+    Right x -> bindFn x
+    Left x  -> return $ Left x
+
+type ApiCombinator a = CharacterID -> CharacterInfo -> CorporationInfo -> Maybe AllianceInfo -> KillboardStats -> [a]
+
+combinedLookup :: ApiCombinator a -> [CharacterName] -> HttpClient (HttpClientResult [a])
+combinedLookup combinator names =
+    getCharacterID names >>=
+      bindHttpClient handleNamesAndIds
+  where
+    handleNamesAndIds namesAndIds =
+      fold <$> traverse handleId namesAndIds
+    handleId (_, charId) = do
+      info <- getCharacterInfo charId
+      zkill <- getKillboardStats charId
+      case (info, zkill) of
+        (Left x, _)        -> return $ Left x
+        (_, Left x)        -> return $ Left x
+        (Right x, Right y) -> handleInfo charId x y
+    handleInfo charId info zkill = do
+      corp <- getCorporationInfo (ciCorporationId info)
+      alliance <- getAllianceInfo (ciAllianceId info)
+      return $ combinator <$> Right charId <*> Right info <*> corp <*> alliance <*> Right zkill

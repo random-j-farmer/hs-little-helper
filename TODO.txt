@@ -1,5 +1,4 @@
+(A) instead of filtering out 0 character ids: [CharacterName, Maybe CharacterID]
 (A) free http client: parallelism
-(A) runTestIO should index by text, currently very slow
-(A) non-throwing xml parse
 (B) manual parsing of zkillboard data, it's just too irregular
 ZKM Stats

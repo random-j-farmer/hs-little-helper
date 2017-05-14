@@ -21,6 +21,7 @@ module Eve.Api.Zkill
   , ZkillInfo(..)
   ) where
 
+import           Control.DeepSeq             (NFData (..))
 import           Control.Exception           (throw)
 import           Control.Logging             (debug, timedDebug)
 import           Data.Aeson
@@ -39,7 +40,7 @@ import           Network.URL                 (URL (..), exportURL, importURL)
 -- | ZKillboard Killboard Statistics for a Pilot
 data KillboardStats =
   KillboardStats
-    { ksid             :: ! CharacterID
+    { ksid             :: Maybe CharacterID
     , ksiskDestroyed   :: Maybe Double
     , ksiskLost        :: Maybe Double
     , ksshipsDestroyed :: Maybe Int
@@ -47,14 +48,14 @@ data KillboardStats =
     , kssoloKills      :: Maybe Int
     , kssoloLosses     :: Maybe Int
     , ksactivePvp      :: Maybe ActivePvp
-    , ksmonths         :: M.Map Text KillboardMonth
-    , ksinfo           :: ! ZkillInfo
+    , ksmonths         :: Maybe (M.Map Text KillboardMonth)
+    , ksinfo           :: Maybe ZkillInfo
     } deriving (Show, Generic)
+instance NFData KillboardStats
 instance ToJSON KillboardStats where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 2}
 instance FromJSON KillboardStats where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = drop 2}
-
 
 -- | Active Pvp info - number of kills/ships/systems in last 7 days
 data ActivePvp =
@@ -63,6 +64,7 @@ data ActivePvp =
     , apsystems :: ! ActivePvpSystems
     , apkills   :: ! ActivePvpKills
     } deriving (Show, Generic)
+instance NFData ActivePvp
 instance ToJSON ActivePvp where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 2}
 instance FromJSON ActivePvp where
@@ -70,18 +72,21 @@ instance FromJSON ActivePvp where
 
 
 newtype ActivePvpShips = ActivePvpShips { apShipcount :: Int } deriving (Show, Generic)
+instance NFData ActivePvpShips
 instance ToJSON ActivePvpShips where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 6}
 instance FromJSON ActivePvpShips where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = drop 6}
 
 newtype ActivePvpSystems = ActivePvpSystems { apSystemcount :: Int } deriving (Show, Generic)
+instance NFData ActivePvpSystems
 instance ToJSON ActivePvpSystems where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 8}
 instance FromJSON ActivePvpSystems where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = drop 8}
 
 newtype ActivePvpKills = ActivePvpKills { apKillcount :: Int } deriving (Show, Generic)
+instance NFData ActivePvpKills
 instance ToJSON ActivePvpKills where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 6}
 instance FromJSON ActivePvpKills where
@@ -96,6 +101,7 @@ data KillboardMonth =
     , kmiskDestroyed   :: Maybe Double
     , kmiskLost        :: Maybe Double
     } deriving (Show, Generic)
+instance NFData KillboardMonth
 instance ToJSON KillboardMonth where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 2}
 instance FromJSON KillboardMonth where
@@ -106,11 +112,12 @@ data ZkillInfo =
   ZkillInfo
     { ziallianceID    :: Maybe AllianceID
     , zicorporationID :: ! CorporationID
-    , zifactionID     :: ! Int
-    , zikillID        :: ! Integer
+    , zifactionID     :: Maybe Int
+    , zikillID        :: Maybe Integer
     , ziname          :: ! Text
     , zisecStatus     :: ! Double
     } deriving (Show, Generic)
+instance NFData ZkillInfo
 instance ToJSON ZkillInfo where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 2}
 instance FromJSON ZkillInfo where

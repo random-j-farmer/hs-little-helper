@@ -27,6 +27,7 @@ library
                      , bytestring
                      , containers
                      , cert-store-manager
+                     , deepseq
                      , formatting
                      , free
                      , hexpat

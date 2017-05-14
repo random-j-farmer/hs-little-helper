@@ -20,6 +20,7 @@ module Eve.Api.Esi
 where
 
 import           Control.Concurrent.MSem     (MSem, new)
+import           Control.DeepSeq             (NFData (..))
 import           Control.Logging             (timedDebug)
 import           Data.Aeson
 import           Data.Aeson.Types
@@ -57,6 +58,7 @@ data CharacterInfo = CharacterInfo
   , ciSecurityStatus :: ! Double
   } deriving (Show, Generic)
 
+instance NFData CharacterInfo
 instance ToJSON CharacterInfo where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . drop 2}
 instance FromJSON CharacterInfo where
@@ -91,6 +93,7 @@ data CorporationInfo = CorporationInfo
   , coFaction                :: Maybe Text
   } deriving (Show, Generic)
 
+instance NFData CorporationInfo
 instance ToJSON CorporationInfo where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . drop 2}
 instance FromJSON CorporationInfo where
@@ -112,6 +115,7 @@ data AllianceInfo = AllianceInfo
   , aiExecutorCorp :: ! Integer
   } deriving (Show, Generic)
 
+instance NFData AllianceInfo
 instance ToJSON AllianceInfo where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . drop 2}
 instance FromJSON AllianceInfo where
