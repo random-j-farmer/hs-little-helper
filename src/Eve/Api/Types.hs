@@ -24,7 +24,7 @@ module Eve.Api.Types ( CharacterName
 where
 
 import           Control.DeepSeq     (NFData (..))
-import           Control.Exception   (SomeException)
+import           Control.Exception   (SomeException, Exception(..))
 import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Ord
@@ -52,6 +52,8 @@ data HttpClientException
   | HttpClientXmlParseError XMLParseError
   | OtherError String
   deriving (Show, Typeable, Generic)
+
+instance Exception HttpClientException
 
 -- | CharacterName is a normalized form of a character's name.
 --

@@ -13,7 +13,7 @@ module Eve.Api.Xml
   where
 
 import           Control.Concurrent.MSem     (MSem, new)
-import           Control.Exception           (Exception (..), throwIO)
+import           Control.Exception           (Exception (..), throw)
 import           Control.Logging             (debug, timedDebug)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString             as B
@@ -44,11 +44,11 @@ characterIDUrl charNames = urlWithNames where
     tuples = (,) "names" . T.unpack . _characterName <$> charNames
     urlWithNames = exportURL $ foldr (flip add_param) url tuples
 
-parseXMLBody :: LB.ByteString -> HttpClientResult [(CharacterName, CharacterID)]
+parseXMLBody :: LB.ByteString -> [(CharacterName, CharacterID)]
 parseXMLBody body =
   case parseXml body of
-    (_, Just x) -> Left $ HttpClientXmlParseError x
-    (x, _) -> Right $ extractCharacterIDs x
+    (_, Just x) -> throw $ HttpClientXmlParseError x
+    (x, _) -> extractCharacterIDs x
 
 parseXml :: LB.ByteString -> (UNode Text, Maybe XMLParseError)
 parseXml = parse defaultParseOptions
