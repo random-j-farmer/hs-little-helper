@@ -34,7 +34,7 @@ import           Data.Either                 (partitionEithers)
 import           Data.Foldable               (fold)
 import           Data.List.Split             (chunksOf)
 import qualified Data.Map.Strict             as M
-import           Data.Maybe                  (fromJust)
+import           Data.Maybe                  (fromJust, fromMaybe)
 import           Data.Text                   (Text)
 import           Data.Time.Clock             (DiffTime, UTCTime, diffUTCTime,
                                               getCurrentTime)
@@ -162,7 +162,7 @@ getCharacterIDChunk names = do
   parseXMLBody <$> httpGet xmlApiSem url
 
 
-combinedLookup :: [CharacterName] -> IO [(CharacterID, CharacterInfo, CorporationInfo, Maybe AllianceInfo, KillboardStats)]
+combinedLookup :: [CharacterName] -> IO [PilotInfo]
 combinedLookup names = do
     tuples <- getCharacterID names
     mapConcurrently handleId tuples
@@ -174,8 +174,20 @@ combinedLookup names = do
     handleInfo charId info zkill = do
       (corp, alliance) <- concurrently (getCorporationInfo (ciCorporationId info))
                                        (getAllianceInfo (ciAllianceId info))
-      return $ (,,,,) charId info corp alliance zkill
+      return $ pilotInfo charId info corp alliance zkill
 
+
+pilotInfo :: CharacterID -> CharacterInfo -> CorporationInfo -> Maybe AllianceInfo -> KillboardStats -> PilotInfo
+pilotInfo charId info corp alliance killboard =
+  PilotInfo { pilotName = ciName info
+            , pilotID = charId
+            , pilotCorporationName = coCorporationName corp
+            , pilotCorporationID = ciCorporationId info
+            , pilotAllianceName = aiAllianceName <$> alliance
+            , pilotAllianceID = ciAllianceId info
+            , pilotFactionName = coFaction corp
+            , pilotRecentKills = fromMaybe 0 $ apKillcount . apkills <$> ksactivePvp killboard
+            }
 
 xmlApiSem :: MSem Int
 {-# NOINLINE xmlApiSem #-}

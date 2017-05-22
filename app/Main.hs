@@ -47,14 +47,13 @@ main = withSocketsDo $ withStdoutLogging $ do
 handleFile fn = do
   str <- TIO.readFile fn
   let names = characterName <$> T.lines str
-  tuples <- combinedLookup names
-  mapM_ handleTuple tuples
-  
-handleTuple :: (CharacterID, CharacterInfo, CorporationInfo, Maybe AllianceInfo, KillboardStats) -> IO ()
-handleTuple (charId, info, corp, alliance, stats) =
-  debug $ sformat ("char:" % stext % " corp:" % stext % " alliance:" % stext % " kills:" % int % " losses:" % int)
-                  (ciName info)
-                  (coCorporationName corp)
-                  (fromMaybe "" $ aiAllianceName <$> alliance)
-                  (fromMaybe 0 $ ksshipsDestroyed stats)
-                  (fromMaybe 0 $ ksshipsLost stats)
+  pilots <- combinedLookup names
+  mapM_ handlePilot pilots
+
+handlePilot :: PilotInfo -> IO ()
+handlePilot pilot =
+  debug $ sformat ("char:" % stext % " corp:" % stext % " alliance:" % stext % " kills:" % int)
+                  (pilotName pilot)
+                  (pilotCorporationName pilot)
+                  (fromMaybe "" $ pilotAllianceName pilot)
+                  (pilotRecentKills pilot)

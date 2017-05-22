@@ -20,6 +20,7 @@ module Eve.Api.Types ( CharacterName
                      , AllianceID(..)
                      , HttpClientResult(..)
                      , HttpClientException(..)
+                     , PilotInfo(..)
                      )
 where
 
@@ -123,3 +124,20 @@ instance FromJSONKey AllianceID where
   fromJSONKey = AllianceID <$> fromJSONKey
 instance ToJSONKey AllianceID where
   toJSONKey = toJSONKeyText (T.pack . show)
+
+data PilotInfo
+  = PilotInfo
+    { pilotName :: Text
+    , pilotID :: CharacterID
+    , pilotCorporationName :: Text
+    , pilotCorporationID :: CorporationID
+    , pilotAllianceName :: Maybe Text
+    , pilotAllianceID :: Maybe AllianceID
+    , pilotFactionName :: Maybe Text
+    , pilotRecentKills :: Int
+    } deriving (Show, Generic)
+instance NFData PilotInfo
+instance ToJSON PilotInfo where
+  toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . drop 5}
+instance FromJSON PilotInfo where
+  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . drop 5}
