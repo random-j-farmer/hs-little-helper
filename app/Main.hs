@@ -1,59 +1,87 @@
-{-# LANGUAGE OverloadedStrings #-}
-module Main where
-
-import           Control.Exception           (throw)
-import           Control.Logging             (debug, log, withStdoutLogging, errorL)
-import           Control.Monad               (mapM_)
-import           Data.Aeson                  (encode)
-import qualified Data.ByteString.Lazy        as LB
-import qualified Data.ByteString.Lazy.UTF8   as U
-import qualified Data.Map.Strict             as M
-import           Data.Maybe                  (fromJust, fromMaybe)
-import qualified Data.Text                   as T
-import qualified Data.Text.IO                as TIO
-import qualified Data.Text.Lazy              as LT
-import           Eve.Api.Config
-import           Eve.Api.Esi
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE QuasiQuotes           #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeFamilies          #-}
+import           Control.Applicative ((<$>), (<*>))
+import           Control.Logging     (withStdoutLogging)
+import           Data.List           (sortBy)
+import           Data.Maybe          (fromMaybe)
+import           Data.Text           (Text)
+import qualified Data.Text           as T
 import           Eve.Api.Http
 import           Eve.Api.Types
-import           Eve.Api.Xml
-import           Eve.Api.Zkill
-import           Formatting                  (int, sformat, stext, (%), shown)
-import           Network.HTTP.Client.CertMan (setGlobalManagerFromPath)
-import           Network.Socket              (withSocketsDo)
-import           System.Environment          (getArgs, lookupEnv)
-import System.Console.GetOpt
+import           Yesod
 
-data Flag = Test deriving (Show, Eq)
+data LittleHelper = LittleHelper
 
-options :: [OptDescr Flag]
-options = [ Option ['t'] ["test"] (NoArg Test) "use test runner (fixed set of test data)"]
+mkYesod "LittleHelper" [parseRoutes|
+/ HomeR GET
+/pilots PilotsR GET POST
+|]
 
-parseOpts :: [String] -> IO ([Flag], [String])
-parseOpts args =
-  case getOpt Permute options args of
-    (o, n, []) -> return (o, n)
-    (_, _, errs) -> ioError (userError (concat errs ++ usageInfo header options))
-  where header = "Usage: hs-little-helper [OPTION...] files..."
+instance Yesod LittleHelper
+
+-- Tells our application to use the standard English messages.
+-- If you want i18n, then you can supply a translating function instead.
+instance RenderMessage LittleHelper FormMessage where
+  renderMessage _ _ = defaultFormMessage
+
+data Pilots = Pilots
+  { pilotsLocation :: Text
+  , pilotsNames    :: Textarea }
+  deriving Show
+
+getHomeR :: Handler Html
+getHomeR = defaultLayout $ do
+  setTitle "Random's Little Helper"
+  [whamlet|
+<h1>Random's Little Helper
+<ul>
+  <li><a href=@{PilotsR}>Pilots</a>
+|]
+
+pilotsForm :: Html -> MForm Handler (FormResult Pilots, Widget)
+pilotsForm = renderDivs $ Pilots
+  <$> areq textField "Location" Nothing
+  <*> areq textareaField "Names" Nothing
+
+getPilotsR :: Handler Html
+getPilotsR = do
+  (widget, enctype) <- generateFormPost pilotsForm
+  defaultLayout
+    [whamlet|
+      <form method=post action=@{PilotsR} enctype=#{enctype}>
+        ^{widget}
+        <br>
+        <button>Submit
+    |]
+
+postPilotsR :: Handler Html
+postPilotsR = do
+  ((result, widget), enctype) <- runFormPost pilotsForm
+  case result of
+    FormSuccess pilots -> do
+      let names = (characterName . T.strip) <$> T.lines (unTextarea $ pilotsNames pilots)
+      pilotInfos <- liftIO $ combinedLookup names
+      let sortedPilots = sortBy (\x y -> compare (pilotRecentKills y) (pilotRecentKills x)) pilotInfos
+      defaultLayout [whamlet|
+                      <ul>
+                        $forall pilot <- sortedPilots
+                          <li>#{pilotName pilot} -
+                              #{pilotCorporationName pilot} -
+                              #{fromMaybe "" $ pilotAllianceName pilot} -
+                              #{fromMaybe "" $ pilotFactionName pilot} -
+                              #{pilotRecentKills pilot}
+                    |]
+    _ -> defaultLayout
+            [whamlet|
+              <p>Oopsie!
+              <form method=post action=@{PilotsR} enctype=#{enctype}>
+                ^{widget}
+                <button>Submit
+            |]
+
 
 main :: IO ()
-main = withSocketsDo $ withStdoutLogging $ do
-  setGlobalManagerFromPath certificateStore
-  (opts, args) <- getArgs >>= parseOpts
-  let filenames = if null args then [ "short.x" ] else args
-  mapM_ handleFile filenames
-  return ()
-
-handleFile fn = do
-  str <- TIO.readFile fn
-  let names = characterName <$> T.lines str
-  pilots <- combinedLookup names
-  mapM_ handlePilot pilots
-
-handlePilot :: PilotInfo -> IO ()
-handlePilot pilot =
-  debug $ sformat ("char:" % stext % " corp:" % stext % " alliance:" % stext % " kills:" % int)
-                  (pilotName pilot)
-                  (pilotCorporationName pilot)
-                  (fromMaybe "" $ pilotAllianceName pilot)
-                  (pilotRecentKills pilot)
+main = withStdoutLogging $ warp 3000 LittleHelper

@@ -47,7 +47,7 @@ data KillboardStats =
     , ksshipsLost      :: Maybe Int
     , kssoloKills      :: Maybe Int
     , kssoloLosses     :: Maybe Int
-    , ksactivePvp      :: Maybe ActivePvp
+    , ksactivepvp      :: Maybe ActivePvp
     , ksmonths         :: Maybe (M.Map Text KillboardMonth)
     , ksinfo           :: Maybe ZkillInfo
     } deriving (Show, Generic)
@@ -60,9 +60,9 @@ instance FromJSON KillboardStats where
 -- | Active Pvp info - number of kills/ships/systems in last 7 days
 data ActivePvp =
   ActivePvp
-    { apships   :: ! ActivePvpShips
-    , apsystems :: ! ActivePvpSystems
-    , apkills   :: ! ActivePvpKills
+    { apships   :: Maybe ActivePvpShips
+    , apsystems :: Maybe ActivePvpSystems
+    , apkills   :: Maybe ActivePvpKills
     } deriving (Show, Generic)
 instance NFData ActivePvp
 instance ToJSON ActivePvp where
@@ -71,21 +71,21 @@ instance FromJSON ActivePvp where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = drop 2}
 
 
-newtype ActivePvpShips = ActivePvpShips { apShipcount :: Int } deriving (Show, Generic)
+newtype ActivePvpShips = ActivePvpShips { apshipcount :: Int } deriving (Show, Generic)
 instance NFData ActivePvpShips
 instance ToJSON ActivePvpShips where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 6}
 instance FromJSON ActivePvpShips where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = drop 6}
 
-newtype ActivePvpSystems = ActivePvpSystems { apSystemcount :: Int } deriving (Show, Generic)
+newtype ActivePvpSystems = ActivePvpSystems { apsystemcount :: Int } deriving (Show, Generic)
 instance NFData ActivePvpSystems
 instance ToJSON ActivePvpSystems where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 8}
 instance FromJSON ActivePvpSystems where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = drop 8}
 
-newtype ActivePvpKills = ActivePvpKills { apKillcount :: Int } deriving (Show, Generic)
+newtype ActivePvpKills = ActivePvpKills { apkillcount :: Int } deriving (Show, Generic)
 instance NFData ActivePvpKills
 instance ToJSON ActivePvpKills where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = drop 6}

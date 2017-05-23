@@ -44,7 +44,7 @@ import           Eve.Api.Esi
 import           Eve.Api.Types
 import           Eve.Api.Xml
 import           Eve.Api.Zkill
-import           Formatting                  (int, sformat, stext, string, (%))
+import           Formatting                  (int, sformat, stext, string, (%), shown)
 import           Network.HTTP.Client.CertMan (getURL)
 import           System.IO.Unsafe            (unsafePerformIO)
 
@@ -63,8 +63,7 @@ getClientResult cache sem msg toUrl decodeResult k = do
   cached <- validCache cache k
   case cached of
     Just x -> return x
-    Nothing -> do
-      debug msg
+    Nothing -> timedDebug msg $ do
       result <- decodeResult <$> httpGet sem (toUrl k)
       putCurrentCache cache k result
       return result
@@ -155,11 +154,11 @@ lookupEither m k =
     Nothing -> Left k
     Just a  -> Right (k, a)
 
-getCharacterIDChunk names = do
-  debug (sformat ("looking up character ids: " % int % " names")
-                      (length names))
-  let url = characterIDUrl names
-  parseXMLBody <$> httpGet xmlApiSem url
+getCharacterIDChunk names =
+  timedDebug (sformat ("looking up character ids: " % int % " names")
+                      (length names)) $ do
+    let url = characterIDUrl names
+    parseXMLBody <$> httpGet xmlApiSem url
 
 
 combinedLookup :: [CharacterName] -> IO [PilotInfo]
@@ -170,6 +169,7 @@ combinedLookup names = do
     handleId (_, charId) = do
       (info, zkill) <- concurrently (getCharacterInfo charId)
                                     (getKillboardStats charId)
+      debug $ sformat ("killboard: " % shown) (ksactivepvp zkill)
       handleInfo charId info zkill
     handleInfo charId info zkill = do
       (corp, alliance) <- concurrently (getCorporationInfo (ciCorporationId info))
@@ -186,7 +186,7 @@ pilotInfo charId info corp alliance killboard =
             , pilotAllianceName = aiAllianceName <$> alliance
             , pilotAllianceID = ciAllianceId info
             , pilotFactionName = coFaction corp
-            , pilotRecentKills = fromMaybe 0 $ apKillcount . apkills <$> ksactivePvp killboard
+            , pilotRecentKills = fromMaybe 0 $ apkillcount <$> (ksactivepvp killboard >>= apkills)
             }
 
 xmlApiSem :: MSem Int
