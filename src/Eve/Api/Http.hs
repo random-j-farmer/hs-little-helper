@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {- |
 Module:      Eve.Api.Http
 Description: Eve Api HTTP IO
@@ -19,16 +18,14 @@ module Eve.Api.Http
   )
 where
 
-import           Control.Concurrent.Async    (Concurrently (..), concurrently,
-                                              mapConcurrently, runConcurrently)
-import           Control.Concurrent.MSem     (MSem (..), new, signal, wait)
-import           Control.Concurrent.MVar     (MVar (..), modifyMVar_, newMVar,
+import           Control.Concurrent.Async    (concurrently, mapConcurrently)
+import           Control.Concurrent.MSem     (MSem, new, signal, wait)
+import           Control.Concurrent.MVar     (MVar, modifyMVar_, newMVar,
                                               readMVar)
-import           Control.Exception           (bracket_, catch, throw)
+import           Control.Exception           (bracket_, throw)
 import           Control.Logging             (debug, timedDebug,
                                               withStdoutLogging)
 import           Data.Aeson
-import           Data.Aeson.Types
 import qualified Data.ByteString.Lazy        as L
 import           Data.Either                 (partitionEithers)
 import           Data.Foldable               (fold)
@@ -36,7 +33,7 @@ import           Data.List.Split             (chunksOf)
 import qualified Data.Map.Strict             as M
 import           Data.Maybe                  (fromJust, fromMaybe)
 import           Data.Text                   (Text)
-import           Data.Time.Clock             (DiffTime, UTCTime, diffUTCTime,
+import           Data.Time.Clock             (UTCTime, diffUTCTime,
                                               getCurrentTime)
 import           Data.Tuple                  (swap)
 import           Eve.Api.Config
@@ -44,8 +41,9 @@ import           Eve.Api.Esi
 import           Eve.Api.Types
 import           Eve.Api.Xml
 import           Eve.Api.Zkill
-import           Formatting                  (int, sformat, stext, string, (%), shown)
+import           Formatting                  (int, sformat, (%))
 import           Network.HTTP.Client.CertMan (getURL)
+import           Prelude
 import           System.IO.Unsafe            (unsafePerformIO)
 
 guardIO :: MSem Int -> IO a -> IO a
@@ -58,12 +56,12 @@ httpGet :: MSem Int -> Text -> String -> IO L.ByteString
 httpGet sem msg url = guardIO sem $ timedDebug msg $ getURL url
 
 cachedGet :: MSem Int -> Text -> IO (Maybe a) -> (a -> IO ()) -> (L.ByteString -> a) -> String -> IO a
-cachedGet sem msg cacheLookup cacheEnter decode url = guardIO sem $ do
+cachedGet sem msg cacheLookup cacheEnter decodeFn url = guardIO sem $ do
     cached <- cacheLookup
     case cached of
       Just x -> return x
       Nothing -> do
-        result <- timedDebug msg (decode <$> getURL url)
+        result <- timedDebug msg (decodeFn <$> getURL url)
         cacheEnter result
         return result
 
@@ -77,11 +75,13 @@ getClientResult cache sem msg toUrl decodeResult k = do
     Just x -> return x
     Nothing -> cachedGet sem msg cacheLookup cacheEnter decodeResult (toUrl k)
 
+validCache :: Ord k => MVar (M.Map k (Cached b)) -> k -> IO (Maybe b)
 validCache mvar k = do
   m <- readMVar mvar
   now <- getCurrentTime
   return $ M.lookup k m >>= filterOutdated now
 
+putCurrentCache :: Ord k => MVar (M.Map k (Cached a)) -> k -> a -> IO ()
 putCurrentCache mvar k v = do
   now <- getCurrentTime
   modifyMVar_ mvar $ return . M.insert k (Cached v now)
@@ -90,6 +90,7 @@ putCurrentCache mvar k v = do
 cacheSeconds :: Double
 cacheSeconds = 3*3600
 
+filterOutdated :: UTCTime -> Cached a -> Maybe a
 filterOutdated now ca =
   if realToFrac delta < cacheSeconds
     then Just (cachedInfo ca)
@@ -148,21 +149,26 @@ getCharacterID names = do
   putCachedCharacterID result
   return $ known ++ result
 
+cachedCharacterID :: [CharacterName] -> IO ([(CharacterName, CharacterID)], [CharacterName])
 cachedCharacterID names = do
   byName <- readMVar idByName
   return $ knownAndUnknown byName names
 
+putCachedCharacterID :: [(CharacterName, CharacterID)] -> IO ()
 putCachedCharacterID tuples =
   modifyMVar_ idByName $ return . M.union (M.fromList tuples)
 
+knownAndUnknown :: Ord a => M.Map a t -> [a] -> ([(a, t)], [a])
 knownAndUnknown m ks =
   swap (partitionEithers (lookupEither m <$> ks))
 
+lookupEither :: Ord t1 => M.Map t1 t -> t1 -> Either t1 (t1, t)
 lookupEither m k =
   case M.lookup k m of
     Nothing -> Left k
     Just a  -> Right (k, a)
 
+getCharacterIDChunk :: [CharacterName] -> IO [(CharacterName, CharacterID)]
 getCharacterIDChunk names = do
   let msg = sformat ("looking up character ids: " % int % " names")
                     (length names)
@@ -177,7 +183,7 @@ combinedLookup names = do
     handleId (_, charId) = do
       (info, zkill) <- concurrently (getCharacterInfo charId)
                                     (getKillboardStats charId)
-      debug $ sformat ("killboard: " % shown) (ksactivepvp zkill)
+      -- debug $ sformat ("killboard: " % shown) (ksactivepvp zkill)
       handleInfo charId info zkill
     handleInfo charId info zkill = do
       (corp, alliance) <- concurrently (getCorporationInfo (ciCorporationId info))
@@ -279,10 +285,12 @@ loadCaches = withStdoutLogging $ do
   loadCache allianceInfoCache "dump/alliances.json"
   loadCache killboardStatCache "dump/killboards.json"
 
+dumpCache :: ToJSON a => MVar a -> FilePath -> IO ()
 dumpCache mvar fn = do
   m <- readMVar mvar
   L.writeFile fn $ encode m
 
+loadCache :: (FromJSON a, Ord k, FromJSONKey k) => MVar (M.Map k a) -> FilePath -> IO ()
 loadCache mvar fn = do
   loaded  <- (fromJust . decode) <$> L.readFile fn
   modifyMVar_ mvar (return . M.union loaded)

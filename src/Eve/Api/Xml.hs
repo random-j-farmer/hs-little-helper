@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 {- |
 Module:      Eve.Api.Xml
 Description: XML API - ohly character id lookup
@@ -12,31 +10,17 @@ module Eve.Api.Xml
   , parseXMLBody)
   where
 
-import           Control.Concurrent.MSem     (MSem, new)
-import           Control.Exception           (Exception (..), throw)
-import           Control.Logging             (debug, timedDebug)
-import           Data.ByteString             (ByteString)
-import qualified Data.ByteString             as B
-import qualified Data.ByteString.Lazy        as LB
-import           Data.Foldable               (foldl')
-import           Data.List.Split             (chunksOf)
-import           Data.Maybe                  (fromJust)
-import           Data.Text                   (Text)
-import qualified Data.Text                   as T
-import           Data.Typeable               (Typeable (..))
-import           Eve.Api.Config
+import           Control.Exception    (throw)
+import qualified Data.ByteString.Lazy as LB
+import           Data.Maybe           (fromJust)
+import           Data.Text            (Text)
+import qualified Data.Text            as T
 import           Eve.Api.Types
-import           Formatting                  (int, sformat, shown, text, (%))
-import           Network.HTTP.Client
-import           Network.HTTP.Client.CertMan (getURL)
-import           Network.HTTP.Client.TLS
-import           Network.HTTP.Types.Status   (statusCode)
-import           Network.URL                 (add_param, exportURL, importURL)
-import           System.Environment          (lookupEnv)
-import           Text.XML.Expat.Proc         (findChild, findChildren)
-import           Text.XML.Expat.Tree         (UNode, XMLParseError,
-                                              defaultParseOptions, getAttribute,
-                                              parse)
+import           Network.URL          (add_param, exportURL, importURL)
+import           Prelude
+import           Text.XML.Expat.Proc  (findChild, findChildren)
+import           Text.XML.Expat.Tree  (UNode, XMLParseError,
+                                       defaultParseOptions, getAttribute, parse)
 
 characterIDUrl :: [CharacterName] -> String
 characterIDUrl charNames = urlWithNames where
@@ -48,7 +32,7 @@ parseXMLBody :: LB.ByteString -> [(CharacterName, CharacterID)]
 parseXMLBody body =
   case parseXml body of
     (_, Just x) -> throw $ HttpClientXmlParseError x
-    (x, _) -> extractCharacterIDs x
+    (x, _)      -> extractCharacterIDs x
 
 parseXml :: LB.ByteString -> (UNode Text, Maybe XMLParseError)
 parseXml = parse defaultParseOptions

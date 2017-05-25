@@ -1,9 +1,4 @@
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-
-
+{-# LANGUAGE DeriveGeneric #-}
 {- |
 Module:      Eve.Api.Types
 Description: Common Types for Eve Online APIs
@@ -18,14 +13,14 @@ module Eve.Api.Types ( CharacterName
                      , CharacterID(..)
                      , CorporationID(..)
                      , AllianceID(..)
-                     , HttpClientResult(..)
+                     , HttpClientResult
                      , HttpClientException(..)
                      , PilotInfo(..)
                      )
 where
 
 import           Control.DeepSeq     (NFData (..))
-import           Control.Exception   (SomeException, Exception(..))
+import           Control.Exception   (Exception (..))
 import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Ord
@@ -34,6 +29,7 @@ import qualified Data.Text           as T
 import           Data.Typeable       (Typeable)
 import           GHC.Generics
 import           Network.HTTP.Client (HttpException)
+import           Prelude
 import           Text.XML.Expat.Tree (XMLParseError)
 
 -- | General return type
@@ -127,14 +123,14 @@ instance ToJSONKey AllianceID where
 
 data PilotInfo
   = PilotInfo
-    { pilotName :: Text
-    , pilotID :: CharacterID
+    { pilotName            :: Text
+    , pilotID              :: CharacterID
     , pilotCorporationName :: Text
-    , pilotCorporationID :: CorporationID
-    , pilotAllianceName :: Maybe Text
-    , pilotAllianceID :: Maybe AllianceID
-    , pilotFactionName :: Maybe Text
-    , pilotRecentKills :: Int
+    , pilotCorporationID   :: CorporationID
+    , pilotAllianceName    :: Maybe Text
+    , pilotAllianceID      :: Maybe AllianceID
+    , pilotFactionName     :: Maybe Text
+    , pilotRecentKills     :: Int
     } deriving (Show, Generic)
 instance NFData PilotInfo
 instance ToJSON PilotInfo where

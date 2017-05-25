@@ -1,5 +1,4 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 {- |
 Module:      Eve.Api.Esi
 Description: Eve Swagger Interface
@@ -19,22 +18,16 @@ module Eve.Api.Esi
   )
 where
 
-import           Control.Concurrent.MSem     (MSem, new)
 import           Control.DeepSeq             (NFData (..))
-import           Control.Logging             (timedDebug)
 import           Data.Aeson
 import           Data.Aeson.Types
-import qualified Data.ByteString.Lazy        as LB
 import           Data.Maybe                  (fromJust)
-import           Data.Ord
 import           Data.Text                   (Text)
-import qualified Data.Text                   as T
 import           Eve.Api.Config
 import           Eve.Api.Types
-import           Formatting                  (int, sformat, (%))
 import           GHC.Generics
-import           Network.HTTP.Client.CertMan (getURL)
 import           Network.URL                 (add_param, exportURL, importURL)
+import           Prelude
 
 -- {"corporation_id": 98393635, "birthday": "2015-04-21T08:29:44Z", "name": "Random J Farmer", "gender": "male", "race_id":1, "bloodline_id": 2, "description": "", "alliance_id": 99007035, "ancestry_id": 7, "security_status": -1.1106748358672103}
 {-

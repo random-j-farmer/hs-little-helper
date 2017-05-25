@@ -40,12 +40,13 @@ packages:
 - location:
     git: https://github.com/random-j-farmer/cert-store-manager.git
     commit: 862b96ae69b3cde63b8c05a031edd7d36ad9bf17
+  extra-dep: true
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps: [
-  logging-3.0.4
-]
+extra-deps: 
+  - logging-3.0.4
+  - cert-store-manager-0.1.0.0
 
 # Override default flag values for local packages and extra-deps
 flags: {}

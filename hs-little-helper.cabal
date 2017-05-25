@@ -1,79 +1,173 @@
-name:                hs-little-helper
-version:             0.1.0.0
--- synopsis:
--- description:
-homepage:            https://github.com/random-j-farmer/hs-little-helper#readme
-license:             BSD3
-license-file:        LICENSE
-author:              Random J. Farmer
-maintainer:          random.j.farmer@gmail.com
-copyright:           (c) 2017 Random J. Farmer
-category:            Web
-build-type:          Simple
-extra-source-files:  README.md
-cabal-version:       >=1.10
+name:              hs-little-helper
+version:           0.0.0
+cabal-version:     >= 1.8
+build-type:        Simple
+
+Flag dev
+    Description:   Turn on development settings, like auto-reload templates.
+    Default:       False
+
+Flag library-only
+    Description:   Build for use with "yesod devel"
+    Default:       False
 
 library
-  hs-source-dirs:      src
-  exposed-modules:     Eve.Api.Config
-                     , Eve.Api.Types
-                     , Eve.Api.Http
-                     , Eve.Api.Esi
-                     , Eve.Api.Xml
-                     , Eve.Api.Zkill
-  build-depends:       base >= 4.7 && < 5
-                     , aeson
-                     , async
-                     , bytestring
-                     , containers
-                     , cert-store-manager
-                     , deepseq
-                     , exceptions
-                     , formatting
-                     , free
-                     , hexpat
-                     , http-client
-                     , http-client-tls
-                     , http-types
-                     , logging
-                     , network
-                     , monad-par
-                     , SafeSemaphore
-                     , split
-                     , text
-                     , time
-                     , transformers
-                     , url
-                     , utf8-string
-                     , yesod
-  default-language:    Haskell2010
+    hs-source-dirs: ., app, src
+    exposed-modules: Application
+                     Foundation
+                     Import
+                     Import.NoFoundation
+                     Settings
+                     Settings.StaticFiles
+                     Handler.Common
+                     Handler.Home
+                     Handler.Comment
+                     Eve.Api.Config
+                     Eve.Api.Esi
+                     Eve.Api.Http
+                     Eve.Api.Types
+                     Eve.Api.Xml
+                     Eve.Api.Zkill
 
-executable hs-little-helper-exe
-  hs-source-dirs:      app
-  main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       base
-                     , hs-little-helper
-                     , bytestring
-                     , containers
-                     , cert-store-manager
-                     , formatting
-                     , logging
-                     , network
-                     , text
-                     , utf8-string
-                     , yesod
-  default-language:    Haskell2010
+    if flag(dev) || flag(library-only)
+        cpp-options:   -DDEVELOPMENT
+        ghc-options:   -Wall -fwarn-tabs -O0
+    else
+        ghc-options:   -Wall -fwarn-tabs -O2
 
-test-suite hs-little-helper-test
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      test
-  main-is:             Spec.hs
-  build-depends:       base
-                     , hs-little-helper
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  default-language:    Haskell2010
+    extensions: TemplateHaskell
+                QuasiQuotes
+                OverloadedStrings
+                NoImplicitPrelude
+                MultiParamTypeClasses
+                TypeFamilies
+                GADTs
+                GeneralizedNewtypeDeriving
+                FlexibleContexts
+                FlexibleInstances
+                EmptyDataDecls
+                NoMonomorphismRestriction
+                DeriveDataTypeable
+                ViewPatterns
+                TupleSections
+                RecordWildCards
+                CPP
 
-source-repository head
-  type:     git
-  location: https://github.com/random-j-farmer/hs-little-helper
+    build-depends:
+                   -- Due to a bug in GHC 8.0.1, we block its usage
+                   -- See: https://ghc.haskell.org/trac/ghc/ticket/12130
+                   base                          >= 4.8.2.0    && < 4.9
+                                              || >= 4.9.1.0    && < 5
+
+                 , yesod                         >= 1.4.3      && < 1.5
+                 , yesod-core                    >= 1.4.30     && < 1.5
+                 , yesod-static                  >= 1.4.0.3    && < 1.6
+                 , yesod-form                    >= 1.4.0      && < 1.5
+                 , classy-prelude                >= 0.10.2
+                 , classy-prelude-conduit        >= 0.10.2
+                 -- version 1.0 had a bug in reexporting Handler, causing trouble
+                 , classy-prelude-yesod          >= 0.10.2     && < 1.0
+                                              || >= 1.1
+                 , bytestring                    >= 0.9        && < 0.11
+                 , text                          >= 0.11       && < 2.0
+                 , template-haskell
+                 , shakespeare                   >= 2.0        && < 2.1
+                 , hjsmin                        >= 0.1        && < 0.3
+                 , monad-control                 >= 0.3        && < 1.1
+                 , wai-extra                     >= 3.0        && < 3.1
+                 , yaml                          >= 0.8        && < 0.9
+                 , http-conduit                  >= 2.1        && < 2.3
+                 , directory                     >= 1.1        && < 1.4
+                 , warp                          >= 3.0        && < 3.3
+                 , data-default
+                 , aeson                         >= 0.6        && < 1.1
+                 , conduit                       >= 1.0        && < 2.0
+                 , monad-logger                  >= 0.3        && < 0.4
+                 , fast-logger                   >= 2.2        && < 2.5
+                 , wai-logger                    >= 2.2        && < 2.4
+                 , file-embed
+                 , safe
+                 , unordered-containers
+                 , containers
+                 , vector
+                 , time
+                 , case-insensitive
+                 , wai
+                 , deepseq
+                 , http-client
+                 , http-client-tls
+                 , cert-store-manager
+                 , hexpat
+                 , SafeSemaphore
+                 , logging
+                 , formatting
+                 , url
+                 , async
+                 , split
+                 , utf8-string
+                 , network
+
+executable         hs-little-helper
+    if flag(library-only)
+        Buildable: False
+
+    main-is:           main.hs
+    hs-source-dirs:    app
+    build-depends:     base, hs-little-helper
+
+    ghc-options:       -threaded -rtsopts -with-rtsopts=-N
+
+    extensions: TemplateHaskell
+                QuasiQuotes
+                OverloadedStrings
+                NoImplicitPrelude
+                MultiParamTypeClasses
+                TypeFamilies
+                GADTs
+                GeneralizedNewtypeDeriving
+                FlexibleContexts
+                FlexibleInstances
+                EmptyDataDecls
+                NoMonomorphismRestriction
+                DeriveDataTypeable
+                ViewPatterns
+                TupleSections
+                RecordWildCards
+                CPP
+
+test-suite test
+    type:              exitcode-stdio-1.0
+    main-is:           Spec.hs
+    other-modules:     Handler.CommonSpec
+                       Handler.HomeSpec
+                       TestImport
+    hs-source-dirs:    test
+    ghc-options:       -Wall
+
+    extensions: TemplateHaskell
+                QuasiQuotes
+                OverloadedStrings
+                NoImplicitPrelude
+                MultiParamTypeClasses
+                TypeFamilies
+                GADTs
+                GeneralizedNewtypeDeriving
+                FlexibleContexts
+                FlexibleInstances
+                EmptyDataDecls
+                NoMonomorphismRestriction
+                DeriveDataTypeable
+                ViewPatterns
+                TupleSections
+                RecordWildCards
+                CPP
+
+    build-depends: base
+                 , hs-little-helper
+                 , yesod-test >= 1.5.2 && < 1.6
+                 , yesod-core
+                 , yesod
+                 , hspec >= 2.0.0
+                 , classy-prelude
+                 , classy-prelude-yesod
+                 , aeson

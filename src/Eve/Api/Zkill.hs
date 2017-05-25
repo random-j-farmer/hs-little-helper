@@ -1,6 +1,4 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
-
+{-# LANGUAGE DeriveGeneric #-}
 {- |
 Module:      Eve.Api.Zkill
 Description: ZKillboard API (stats)
@@ -22,20 +20,15 @@ module Eve.Api.Zkill
   ) where
 
 import           Control.DeepSeq             (NFData (..))
-import           Control.Exception           (throw)
-import           Control.Logging             (debug, timedDebug)
 import           Data.Aeson
 import           Data.Aeson.Types
-import qualified Data.ByteString.Lazy        as L
 import qualified Data.Map.Strict             as M
 import           Data.Maybe                  (fromJust)
 import           Data.Text                   (Text)
-import qualified Data.Text                   as T
 import           Eve.Api.Types
-import           Formatting                  (int, sformat, stext, (%))
 import           GHC.Generics                (Generic)
-import           Network.HTTP.Client.CertMan (getURL)
-import           Network.URL                 (URL (..), exportURL, importURL)
+import           Network.URL                 (exportURL, importURL)
+import           Prelude
 
 -- | ZKillboard Killboard Statistics for a Pilot
 data KillboardStats =

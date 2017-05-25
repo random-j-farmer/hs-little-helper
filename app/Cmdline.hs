@@ -1,28 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import           Control.Exception           (throw)
-import           Control.Logging             (debug, log, withStdoutLogging, errorL)
+import           Control.Logging             (debug, withStdoutLogging)
 import           Control.Monad               (mapM_)
-import           Data.Aeson                  (encode)
-import qualified Data.ByteString.Lazy        as LB
-import qualified Data.ByteString.Lazy.UTF8   as U
-import qualified Data.Map.Strict             as M
-import           Data.Maybe                  (fromJust, fromMaybe)
+import           Data.Maybe                  (fromMaybe)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as TIO
-import qualified Data.Text.Lazy              as LT
 import           Eve.Api.Config
-import           Eve.Api.Esi
 import           Eve.Api.Http
 import           Eve.Api.Types
-import           Eve.Api.Xml
-import           Eve.Api.Zkill
-import           Formatting                  (int, sformat, stext, (%), shown)
+import           Formatting                  (int, sformat, stext, (%))
 import           Network.HTTP.Client.CertMan (setGlobalManagerFromPath)
 import           Network.Socket              (withSocketsDo)
-import           System.Environment          (getArgs, lookupEnv)
-import System.Console.GetOpt
+import           Prelude
+import           System.Console.GetOpt
+import           System.Environment          (getArgs)
 
 data Flag = Test deriving (Show, Eq)
 
@@ -39,11 +31,12 @@ parseOpts args =
 main :: IO ()
 main = withSocketsDo $ withStdoutLogging $ do
   setGlobalManagerFromPath certificateStore
-  (opts, args) <- getArgs >>= parseOpts
+  (_, args) <- getArgs >>= parseOpts
   let filenames = if null args then [ "short.x" ] else args
   mapM_ handleFile filenames
   return ()
 
+handleFile :: FilePath -> IO ()
 handleFile fn = do
   str <- TIO.readFile fn
   let names = characterName <$> T.lines str

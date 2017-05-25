@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 {- |
 Module:      Eve.Api.Config
 Description: Configuration for Eve.Api packages
@@ -19,11 +17,15 @@ module Eve.Api.Config ( certificateStore
 where
 
 import           Data.Maybe         (fromMaybe)
+import           Prelude
 import           System.Environment (lookupEnv)
 import           System.IO.Unsafe   (unsafePerformIO)
 
 {-# NOINLINE maybeEnv #-}
+maybeEnv :: String -> Maybe String
 maybeEnv varname = unsafePerformIO $ lookupEnv varname
+
+env :: String -> String -> String
 env varname def = fromMaybe def $ maybeEnv varname
 
 -- | Path for certificate store - CERT_STORE
