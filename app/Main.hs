@@ -16,8 +16,8 @@ import           Yesod
 data LittleHelper = LittleHelper
 
 mkYesod "LittleHelper" [parseRoutes|
-/ HomeR GET
-/pilots PilotsR GET POST
+/rlh/ HomeR GET
+/rlh/pilots PilotsR GET POST
 |]
 
 instance Yesod LittleHelper

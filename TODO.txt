@@ -1,4 +1,8 @@
-(A) instead of filtering out 0 character ids: [CharacterName, Maybe CharacterID]
-(A) free http client: parallelism
+(A) timedDebug after semaphore is acquired
+(A) another try for cached data after semaphore is acquired
+(A) caches: IORefs with atomic updates instead of MVars
+(A) html, css ... scaffolded yesod app
 (B) manual parsing of zkillboard data, it's just too irregular
-ZKM Stats
+(C) ZKM Stats
+(C) instead of filtering out 0 character ids: [CharacterName, Maybe CharacterID]
+x (A) minimal docker support
