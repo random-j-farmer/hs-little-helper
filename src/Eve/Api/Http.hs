@@ -54,19 +54,28 @@ guardIO sem =
     (wait sem)
     (signal sem)
 
-httpGet :: MSem Int -> String -> IO L.ByteString
-httpGet sem url = guardIO sem $ getURL url
+httpGet :: MSem Int -> Text -> String -> IO L.ByteString
+httpGet sem msg url = guardIO sem $ timedDebug msg $ getURL url
+
+cachedGet :: MSem Int -> Text -> IO (Maybe a) -> (a -> IO ()) -> (L.ByteString -> a) -> String -> IO a
+cachedGet sem msg cacheLookup cacheEnter decode url = guardIO sem $ do
+    cached <- cacheLookup
+    case cached of
+      Just x -> return x
+      Nothing -> do
+        result <- timedDebug msg (decode <$> getURL url)
+        cacheEnter result
+        return result
 
 
 getClientResult :: Ord k => MVar (M.Map k (Cached a)) -> MSem Int -> Text -> (k -> String) -> (L.ByteString -> a) -> k -> IO a
 getClientResult cache sem msg toUrl decodeResult k = do
-  cached <- validCache cache k
+  let cacheLookup = validCache cache k
+  let cacheEnter = putCurrentCache cache k
+  cached <- cacheLookup
   case cached of
     Just x -> return x
-    Nothing -> timedDebug msg $ do
-      result <- decodeResult <$> httpGet sem (toUrl k)
-      putCurrentCache cache k result
-      return result
+    Nothing -> cachedGet sem msg cacheLookup cacheEnter decodeResult (toUrl k)
 
 validCache mvar k = do
   m <- readMVar mvar
@@ -154,12 +163,11 @@ lookupEither m k =
     Nothing -> Left k
     Just a  -> Right (k, a)
 
-getCharacterIDChunk names =
-  timedDebug (sformat ("looking up character ids: " % int % " names")
-                      (length names)) $ do
-    let url = characterIDUrl names
-    parseXMLBody <$> httpGet xmlApiSem url
-
+getCharacterIDChunk names = do
+  let msg = sformat ("looking up character ids: " % int % " names")
+                    (length names)
+  let url = characterIDUrl names
+  parseXMLBody <$> httpGet xmlApiSem msg url
 
 combinedLookup :: [CharacterName] -> IO [PilotInfo]
 combinedLookup names = do
