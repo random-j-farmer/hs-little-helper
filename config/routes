@@ -1,8 +1,6 @@
-/static StaticR Static appStatic
+/rlh/static StaticR Static appStatic
 
 /favicon.ico FaviconR GET
 /robots.txt RobotsR GET
 
-/ HomeR GET POST
-
-/comments CommentR POST
+/rlh/pilots PilotsR GET POST

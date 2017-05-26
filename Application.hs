@@ -26,12 +26,12 @@ import Network.Wai.Middleware.RequestLogger (Destination (Logger),
                                              mkRequestLogger, outputFormat)
 import System.Log.FastLogger                (defaultBufSize, newStdoutLoggerSet,
                                              toLogStr)
+import Control.Logging                      (withStdoutLogging)
 
 -- Import all relevant handler modules here.
 -- Don't forget to add new modules to your cabal file!
 import Handler.Common
-import Handler.Home
-import Handler.Comment
+import Handler.Pilots
 
 -- This line actually creates our YesodDispatch instance. It is the second half
 -- of the call to mkYesodData which occurs in Foundation.hs. Please see the
@@ -58,7 +58,7 @@ makeFoundation appSettings = do
 -- | Convert our foundation to a WAI Application by calling @toWaiAppPlain@ and
 -- applying some additional middlewares.
 makeApplication :: App -> IO Application
-makeApplication foundation = do
+makeApplication foundation = withStdoutLogging $ do
     logWare <- makeLogWare foundation
     -- Create the WAI application and apply middlewares
     appPlain <- toWaiAppPlain foundation

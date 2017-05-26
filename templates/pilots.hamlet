@@ -1,0 +1,32 @@
+<div .container>
+  <div .row>
+    <div .col-lg-4>
+      <form .form-horizontal method=post action=@{PilotsR}#forms enctype=#{formEnctype}>
+          ^{formWidget}
+
+          <button .btn.btn-primary type="submit">
+              Search
+
+
+    <div .col-lg-6.col-lg-offset-1>
+        <div .bs-callout.bs-callout-info.upload-response>
+
+          $if null infos
+            <p>No result.
+          $else
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Name
+                    <th>Corp
+                    <th>Alliance
+                    <th>Faction
+                    <th>Kills
+                <tbody>
+                  $forall info <- infos
+                      <tr>
+                          <td>#{pilotName info}
+                          <td>#{pilotCorporationName info}
+                          <td>#{fromMaybe "" $ pilotAllianceName info}
+                          <td>#{fromMaybe "" $ pilotFactionName info}
+                          <td>#{pilotRecentKills info}

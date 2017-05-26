@@ -84,8 +84,8 @@ instance Yesod App where
         -- Define the menu items of the header.
         let menuItems =
                 [ NavbarLeft $ MenuItem
-                    { menuItemLabel = "Home"
-                    , menuItemRoute = HomeR
+                    { menuItemLabel = "Pilots"
+                    , menuItemRoute = PilotsR
                     , menuItemAccessCallback = True
                     }
                 ]
@@ -147,8 +147,8 @@ instance Yesod App where
 
 -- Define breadcrumbs.
 instance YesodBreadcrumbs App where
-  breadcrumb HomeR = return ("Home", Nothing)
-  breadcrumb  _ = return ("home", Nothing)
+  breadcrumb PilotsR = return ("Pilots", Nothing)
+  breadcrumb  _ = return ("pilots", Nothing)
 
 -- This instance is required to use forms. You can modify renderMessage to
 -- achieve customized and internationalized form validation messages.
