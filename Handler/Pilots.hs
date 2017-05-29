@@ -2,13 +2,12 @@ module Handler.Pilots where
 
 import Import
 import Yesod.Form.Bootstrap3 (BootstrapFormLayout (..), renderBootstrap3)
-import Text.Julius (RawJS (..))
 import Eve.Api.Http
 import Eve.Api.Types
 import Data.Text (strip)
 
 -- Define our data that will be used for creating the form.
-data PilotsForm = PilotsForm
+newtype PilotsForm = PilotsForm
     { pilotsArea :: Textarea
     }
 
@@ -27,14 +26,20 @@ getPilotsR = do
         setTitle "Random's Little Helper"
         $(widgetFile "pilots")
 
-postPilotsR :: Handler Html
+postPilotsR :: Handler TypedContent
 postPilotsR = do
-    ((result, formWidget), formEnctype) <- runFormPost pilotsForm
-    infos <- case result of
-            FormSuccess res ->
-              liftIO (sortOn (negate . pilotRecentKills) <$> pilotInfos res)
-            _ -> return []
-    defaultLayout $ do
+  ((result, formWidget), formEnctype) <- runFormPostNoToken pilotsForm
+  infos <- case result of
+          FormSuccess res ->
+            liftIO (sortOn (negate . pilotRecentKills) <$> pilotInfos res)
+          _ -> return []
+  selectRep $ do
+    provideRep $ do
+      addHeader "Access-Control-Allow-Origin" "*"
+      addHeader "Access-Control-Allow-Methods" "POST"
+      returnJson infos
+    provideRep $
+      defaultLayout $ do
         setTitle "Random's Little Helper"
         $(widgetFile "pilots")
 
@@ -52,7 +57,7 @@ pilotsForm = renderBootstrap3 BootstrapBasicForm $ PilotsForm
             { fsLabel = "Pilot Names"
             , fsTooltip = Nothing
             , fsId = Nothing
-            , fsName = Nothing
+            , fsName = Just "names"
             , fsAttrs =
                 [ ("class", "form-control")
                 , ("placeholder", "...")

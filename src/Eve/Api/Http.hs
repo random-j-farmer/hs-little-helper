@@ -18,6 +18,7 @@ module Eve.Api.Http
   )
 where
 
+import           Control.Applicative         (empty)
 import           Control.Concurrent.Async    (concurrently, mapConcurrently)
 import           Control.Concurrent.MSem     (MSem, new, signal, wait)
 import           Control.Concurrent.MVar     (MVar, modifyMVar_, newMVar,
@@ -236,6 +237,7 @@ instance FromJSON a => FromJSON (Cached a) where
   parseJSON (Object v) = Cached <$>
                         v .: "cachedInfo" <*>
                         v .: "cachedTime"
+  parseJSON _ = empty
 
 idByName :: MVar (M.Map CharacterName CharacterID)
 {-# NOINLINE idByName #-}
